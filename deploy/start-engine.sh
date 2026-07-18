@@ -91,14 +91,14 @@ echo "==> Configuring Caddy reverse proxy for $RAG_DOMAIN"
 # RAGFlow's own nginx (host port 8080, from SVR_WEB_HTTP_PORT) serves the
 # branded web UI AND proxies the REST API (/v1, /api). Pointing Caddy here
 # gives customers the full Runook-branded product at one HTTPS hostname.
+# RAG_DOMAIN may be a comma-separated list; Caddy serves all of them.
 sudo tee /etc/caddy/Caddyfile >/dev/null <<EOF
 $RAG_DOMAIN {
-    reverse_proxy 127.0.0.1:8080 {
-        # Large document uploads.
-        transport http {
-            read_timeout 300s
-            write_timeout 300s
-        }
+    reverse_proxy 127.0.0.1:8080
+
+    # Allow large document uploads.
+    request_body {
+        max_size 1GB
     }
 }
 EOF
