@@ -13,10 +13,17 @@ fi
 set -a; source engine.env; set +a
 
 RAGFLOW_DIR="$HERE/../ragflow"
-if [[ ! -d "$RAGFLOW_DIR" ]]; then
+# Clone if the engine source is missing OR the dir exists but is empty (the
+# Runook-RAG repo gitignores ragflow/, so a bare empty dir can be left behind).
+if [[ ! -f "$RAGFLOW_DIR/docker/docker-compose.yml" ]]; then
   echo "==> Cloning RAGFlow engine source"
+  rm -rf "$RAGFLOW_DIR"
   git clone https://github.com/infiniflow/ragflow.git "$RAGFLOW_DIR"
 fi
+
+# Avoid git "dubious ownership" when this script runs under sudo (root) against
+# a checkout owned by the ubuntu user.
+git config --global --add safe.directory "$RAGFLOW_DIR" 2>/dev/null || true
 
 echo "==> Pinning RAGFlow to ${RAGFLOW_IMAGE##*:}"
 git -C "$RAGFLOW_DIR" fetch --tags --quiet || true
