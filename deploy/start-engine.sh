@@ -32,6 +32,11 @@ git -C "$RAGFLOW_DIR" checkout "${RAGFLOW_IMAGE##*:}" --quiet || \
 
 echo "==> Writing RAGFlow docker/.env overrides"
 DOCKER_DIR="$RAGFLOW_DIR/docker"
+
+# Reset docker/.env to RAGFlow's pristine, version-pinned defaults. Prior runs
+# could have left an inconsistent .env; a clean base guarantees the internal
+# service passwords used for container init match those the app reads back.
+git -C "$RAGFLOW_DIR" checkout -- docker/.env 2>/dev/null || true
 # Our overrides. Keys here replace whatever RAGFlow ships in docker/.env.
 #
 # We intentionally keep RAGFlow's shipped internal passwords (MySQL, MinIO,
