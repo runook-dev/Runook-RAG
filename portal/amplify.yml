@@ -1,0 +1,29 @@
+version: 1
+applications:
+  - appRoot: portal
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - nvm use 20 || nvm install 20
+            - npm ci --cache .npm --prefer-offline
+        build:
+          commands:
+            # Amplify Console env vars are not auto-propagated to the Next.js SSR
+            # Lambda. Bake the ones our API routes need into .env.production.
+            - >-
+              env
+              | grep -E "^(RAGFLOW_BASE_URL|RAGFLOW_ADMIN_TOKEN|RUNOOK_STORE|RUNOOK_DDB_TABLE|RUNOOK_SESSION_SECRET|AWS_REGION)="
+              >> .env.production
+              || true
+            - echo "[build] keys in .env.production:" && grep -oE "^[A-Z_]+(=)" .env.production || true
+            - npm run build
+      artifacts:
+        baseDirectory: .next
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - .next/cache/**/*
+          - node_modules/**/*
+          - .npm/**/*

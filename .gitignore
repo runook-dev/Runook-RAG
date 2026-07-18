@@ -1,0 +1,41 @@
+# Upstream RAGFlow clone — reference only, not part of this repo
+/ragflow/
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Env
+.env
+.env.local
+.env*.local
+.env.production
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Local dev store (file-backed store used when RUNOOK_STORE=local)
+/portal/.data/
+
+# Engine secrets (EC2)
+/deploy/engine.env
+/deploy/**/.env.merged
+/deploy/**/.env.runook
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
