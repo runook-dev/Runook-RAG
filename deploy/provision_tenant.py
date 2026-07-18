@@ -14,6 +14,7 @@ Run it like:
 Output (stdout, last line): {"ok": true, "tenant_id": "...", "api_token": "..."}
 """
 import argparse
+import base64
 import json
 import sys
 
@@ -46,6 +47,16 @@ for _attr in ("CHAT_MDL", "EMBEDDING_MDL", "ASR_MDL", "VISION_MDL", "RERANK_MDL"
         setattr(settings, _attr, "")
 
 
+def _encode_password(raw: str) -> str:
+    """
+    RAGFlow's web login RSA-decrypts the submitted password and the result is
+    base64(raw_password) (see api/utils/crypt.py + user_api.login). The stored
+    hash must therefore be generate_password_hash(base64(raw)). We mirror that
+    here so accounts created by this script can log in via the web UI.
+    """
+    return base64.b64encode(raw.encode("utf-8")).decode("utf-8")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--email", required=True)
@@ -53,9 +64,13 @@ def main() -> int:
     ap.add_argument("--password", required=True)
     args = ap.parse_args()
 
+    encoded_password = _encode_password(args.password)
+
     existing = UserService.query_user_by_email(args.email)
     if existing:
         user_id = existing[0].id
+        # Reset password so it matches the web-login encoding scheme.
+        UserService.update_user_password(user_id, encoded_password)
         tenants = UserTenantService.get_user_tenant_relation_by_user_id(user_id)
         owner = [t for t in tenants if t["role"] == "owner"]
         tenant_id = owner[0]["tenant_id"] if owner else user_id
@@ -64,7 +79,7 @@ def main() -> int:
             {
                 "email": args.email,
                 "nickname": args.nickname,
-                "password": args.password,
+                "password": encoded_password,
                 "login_channel": "password",
                 "is_superuser": False,
             }
