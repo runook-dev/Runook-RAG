@@ -1,0 +1,37 @@
+# Runook-branded RAGFlow image.
+#
+# Strategy: don't rebuild the whole heavy RAGFlow image. Rebuild only the web
+# frontend (with the Runook branding overlay already applied to ./web by
+# branding/apply-branding.sh) and layer the compiled assets onto the official
+# image. This keeps builds fast and upstream upgrades trivial (bump the ARG).
+#
+# Build context must be the ragflow/ directory.
+#   docker build -f ../deploy/Dockerfile.runook \
+#     --build-arg RAGFLOW_IMAGE=infiniflow/ragflow:v0.26.4 \
+#     -t runook-rag:local ./ragflow
+
+ARG RAGFLOW_IMAGE=infiniflow/ragflow:v0.26.4
+
+# ---- Stage 1: build the branded web frontend ----
+FROM node:20-slim AS webbuild
+WORKDIR /web
+
+# Use the public npm registry (the repo's .npmrc points at a CN mirror that is
+# slow/unreliable from AWS).
+ENV npm_config_registry=https://registry.npmjs.org/
+ENV npm_config_engine_strict=false
+
+COPY web/package.json web/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    NODE_OPTIONS="--max-old-space-size=8192" npm install
+
+COPY web ./
+# docs are referenced by parts of the web build.
+COPY docs /docs
+RUN --mount=type=cache,target=/root/.npm \
+    NODE_OPTIONS="--max-old-space-size=8192" VITE_BUILD_SOURCEMAP=false VITE_MINIFY=esbuild npm run build
+
+# ---- Stage 2: layer branded web onto the official image ----
+FROM ${RAGFLOW_IMAGE}
+# Replace the compiled frontend with the Runook-branded build.
+COPY --from=webbuild /web/dist /ragflow/web/dist

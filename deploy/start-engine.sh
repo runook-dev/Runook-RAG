@@ -88,12 +88,20 @@ fi
 docker compose -f "$DOCKER_DIR/docker-compose.yml" up -d --force-recreate
 
 echo "==> Configuring Caddy reverse proxy for $RAG_DOMAIN"
+# RAGFlow's own nginx (host port 8080, from SVR_WEB_HTTP_PORT) serves the
+# branded web UI AND proxies the REST API (/v1, /api). Pointing Caddy here
+# gives customers the full Runook-branded product at one HTTPS hostname.
 sudo tee /etc/caddy/Caddyfile >/dev/null <<EOF
 $RAG_DOMAIN {
-    # RAGFlow REST API (/api/v1) is served on host port 9380 (SVR_HTTP_PORT).
-    reverse_proxy 127.0.0.1:9380
+    reverse_proxy 127.0.0.1:8080 {
+        # Large document uploads.
+        transport http {
+            read_timeout 300s
+            write_timeout 300s
+        }
+    }
 }
 EOF
 sudo systemctl reload caddy || sudo systemctl restart caddy
 
-echo "==> Up. Check: curl -sk https://$RAG_DOMAIN/api/v1/system/config"
+echo "==> Up. Open: https://$RAG_DOMAIN"
