@@ -26,6 +26,24 @@ from api.db.joint_services.user_account_service import create_new_user  # noqa: 
 from api.db.services.api_service import APITokenService  # noqa: E402
 from api.utils.api_utils import generate_confirmation_token  # noqa: E402
 from common.time_utils import current_timestamp, datetime_format  # noqa: E402
+from common import settings  # noqa: E402
+
+# When run standalone (not via the server) RAGFlow's settings globals may be
+# unpopulated, leaving tenant defaults like PARSERS as None (which violates the
+# NOT NULL column). Initialize settings; fall back to a sane default set.
+try:
+    settings.init_settings()
+except Exception:
+    pass
+if not settings.PARSERS:
+    settings.PARSERS = (
+        "naive:General,qa:Q&A,resume:Resume,manual:Manual,table:Table,paper:Paper,"
+        "book:Book,laws:Laws,presentation:Presentation,picture:Picture,one:One,"
+        "audio:Audio,email:Email,tag:Tag"
+    )
+for _attr in ("CHAT_MDL", "EMBEDDING_MDL", "ASR_MDL", "VISION_MDL", "RERANK_MDL"):
+    if getattr(settings, _attr, None) is None:
+        setattr(settings, _attr, "")
 
 
 def main() -> int:
