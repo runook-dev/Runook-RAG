@@ -33,14 +33,15 @@ git -C "$RAGFLOW_DIR" checkout "${RAGFLOW_IMAGE##*:}" --quiet || \
 echo "==> Writing RAGFlow docker/.env overrides"
 DOCKER_DIR="$RAGFLOW_DIR/docker"
 # Our overrides. Keys here replace whatever RAGFlow ships in docker/.env.
-# Note: RAGFlow reuses MYSQL_PASSWORD as MYSQL_ROOT_PASSWORD, so it must be
-# consistent between the mysql container init and the ragflow server.
+#
+# We intentionally keep RAGFlow's shipped internal passwords (MySQL, MinIO,
+# Redis, Elasticsearch) as-is. They are only reachable on the private docker
+# network / host loopback and are never exposed publicly (the security group
+# allows 443 + 22 only, and Caddy proxies just the REST API on 9380). Overriding
+# them with values that must stay consistent across container re-init is a
+# common source of "Access denied" breakage, so we avoid it.
 declare -a OVERRIDES=(
   "RAGFLOW_IMAGE=$RAGFLOW_IMAGE"
-  "MYSQL_PASSWORD=$MYSQL_PASSWORD"
-  "MINIO_PASSWORD=$MINIO_PASSWORD"
-  "REDIS_PASSWORD=$REDIS_PASSWORD"
-  "ELASTIC_PASSWORD=$ELASTIC_PASSWORD"
   "REGISTER_ENABLED=$REGISTER_ENABLED"
   # Free host ports 80/443 for Caddy; remap RAGFlow's built-in web ports.
   # We only proxy the REST API (9380) publicly; the web UI ports are never
