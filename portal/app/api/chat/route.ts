@@ -34,11 +34,33 @@ async function ragflow(token: string, method: string, path: string, body?: unkno
   }
 }
 
+async function listDatasetIds(token: string): Promise<string[]> {
+  const res = await ragflow(token, "GET", "/datasets");
+  const list = (res.data as any)?.data;
+  if (!Array.isArray(list)) return [];
+  return list.map((d: any) => d.id).filter(Boolean);
+}
+
+/**
+ * Ensure a chat assistant exists and is bound to the tenant's current
+ * knowledge bases, so answers are grounded in uploaded documents. We resync
+ * the bound datasets on each call (cheap) so newly added KBs are included.
+ */
 async function ensureAssistant(customer: Customer): Promise<{ chatId: string; model: string } | null> {
+  const datasetIds = await listDatasetIds(customer.ragflowApiToken);
+
   if (customer.ragflowChatId && customer.ragflowChatModel) {
+    // Keep the assistant's datasets in sync (best-effort).
+    await ragflow(customer.ragflowApiToken, "PUT", `/chats/${customer.ragflowChatId}`, {
+      dataset_ids: datasetIds,
+    }).catch(() => {});
     return { chatId: customer.ragflowChatId, model: customer.ragflowChatModel };
   }
-  const created = await ragflow(customer.ragflowApiToken, "POST", "/chats", { name: "Runook Assistant" });
+
+  const created = await ragflow(customer.ragflowApiToken, "POST", "/chats", {
+    name: "Runook Assistant",
+    dataset_ids: datasetIds,
+  });
   const data = (created.data as any)?.data;
   if (!created.ok || !data?.id || !data?.llm_id) return null;
 

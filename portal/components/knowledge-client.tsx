@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 
@@ -79,12 +80,15 @@ export default function KnowledgeClient() {
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {datasets.map((d) => (
-            <Card key={d.id}>
-              <p className="font-medium">{d.name}</p>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                {d.document_count ?? 0} documents · {d.chunk_count ?? 0} chunks
-              </p>
-            </Card>
+            <Link key={d.id} href={`/dashboard/knowledge/${d.id}`}>
+              <Card className="transition-colors hover:border-[var(--accent)]">
+                <p className="font-medium">{d.name}</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  {d.document_count ?? 0} documents · {d.chunk_count ?? 0} chunks
+                </p>
+                <p className="mt-3 text-xs text-[var(--accent)]">Manage documents →</p>
+              </Card>
+            </Link>
           ))}
         </div>
       )}
