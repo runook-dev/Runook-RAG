@@ -62,8 +62,30 @@ set_env REGISTER_ENABLED "$REGISTER_ENABLED"
 set_env SVR_WEB_HTTP_PORT 8080
 set_env SVR_WEB_HTTPS_PORT 8443
 
+# Internal service passwords. docker/.env is the single source of truth: every
+# service reads it via `env_file`, so the MySQL container init and the app read
+# identical values. If engine.env provides values, pin them; otherwise keep
+# whatever docker/.env already has (RAGFlow's shipped defaults).
+#
+# NOTE: MySQL/ES/MinIO persist their password in their data volume on first
+# init. If you CHANGE a password after the first boot you must wipe that
+# volume, or the service will reject the new password ("Access denied"):
+#   docker compose -f ragflow/docker/docker-compose.yml down -v
+[[ -n "${MYSQL_PASSWORD:-}" ]] && set_env MYSQL_PASSWORD "$MYSQL_PASSWORD"
+[[ -n "${MINIO_PASSWORD:-}" ]] && set_env MINIO_PASSWORD "$MINIO_PASSWORD"
+[[ -n "${REDIS_PASSWORD:-}" ]] && set_env REDIS_PASSWORD "$REDIS_PASSWORD"
+[[ -n "${ELASTIC_PASSWORD:-}" ]] && set_env ELASTIC_PASSWORD "$ELASTIC_PASSWORD"
+
 echo "==> Starting RAGFlow (docker compose)"
-docker compose -f "$DOCKER_DIR/docker-compose.yml" up -d
+# --force-recreate ensures every container picks up the current docker/.env,
+# rather than reusing a stale container created from an earlier env.
+# RUNOOK_RESET=1 additionally wipes data volumes for a clean re-initialization
+# (needed if internal passwords changed since the first boot).
+if [[ "${RUNOOK_RESET:-0}" == "1" ]]; then
+  echo "   RUNOOK_RESET=1 -> wiping data volumes for a clean init"
+  docker compose -f "$DOCKER_DIR/docker-compose.yml" down -v --remove-orphans || true
+fi
+docker compose -f "$DOCKER_DIR/docker-compose.yml" up -d --force-recreate
 
 echo "==> Configuring Caddy reverse proxy for $RAG_DOMAIN"
 sudo tee /etc/caddy/Caddyfile >/dev/null <<EOF
