@@ -53,12 +53,28 @@ for f in "$WEB"/src/locales/*.ts; do
   sed -i.bak "s#title: 'RAGFlow'#title: '${BRAND}'#g" "$f" || true
 done
 
-echo "==> Accent color + brand gradient"
+echo "==> Accent color CSS variable"
 sed -i.bak "s#--accent-primary: 0 190 180;#--accent-primary: ${ACCENT_RGB};#g" "$WEB/tailwind.css"
-# Rebrand the two hardcoded gradient spots (login/search/home wordmark).
+
+echo "==> Brand gradient spots"
 grep -rl "from-\[#40EBE3\] to-\[#4A51FF\]" "$WEB/src" 2>/dev/null | while read -r f; do
   sed -i.bak "s|from-\[#40EBE3\] to-\[#4A51FF\]|from-[${GRAD_FROM}] to-[${GRAD_TO}]|g" "$f"
 done
+
+echo "==> Global brand-color replacement (RAGFlow teal/purple -> Runook blue)"
+# RAGFlow's brand teal #00BEB4 (= rgb 0,190,180) is hardcoded across many SVG
+# icons and components; its purple accent lives in the sentiment vars. Replace
+# them everywhere in the web source so the whole UI adopts Runook blue.
+# Runook: #00b5ff = rgb(0,181,255); bright #2dd4ff; deep #0066ff.
+perl -0pi -e '
+  s/#00[bB][eE][bB]4/#00b5ff/g;                     # teal hex (any case)
+  s/0,\s*190,\s*180/0, 181, 255/g;                  # teal rgb/rgba triples
+  s/#02bcdd/#2dd4ff/g;                              # login hover cyan
+  s/rgba\(127,\s*105,\s*255/rgba(0, 181, 255/g;     # purple sentiment (light)
+  s/rgba\(146,\s*118,\s*255/rgba(45, 212, 255/g;    # purple sentiment (dark)
+  s/#338[aA][fF][fF]/#00b5ff/g;                     # legacy antd primary blue
+' $(grep -rlE "#00[bB][eE][bB]4|0,\s*190,\s*180|#02bcdd|127,\s*105,\s*255|146,\s*118,\s*255|#338[aA][fF][fF]" \
+      "$WEB/src" "$WEB/tailwind.css" 2>/dev/null) 2>/dev/null || true
 
 echo "==> Cleaning up .bak files"
 find "$WEB" -name "*.bak" -type f -delete
