@@ -33,37 +33,37 @@ git -C "$RAGFLOW_DIR" checkout "${RAGFLOW_IMAGE##*:}" --quiet || \
 echo "==> Writing RAGFlow docker/.env overrides"
 DOCKER_DIR="$RAGFLOW_DIR/docker"
 
-# Reset docker/.env to RAGFlow's pristine, version-pinned defaults. Prior runs
-# could have left an inconsistent .env; a clean base guarantees the internal
-# service passwords used for container init match those the app reads back.
+# IMPORTANT: every service in RAGFlow's compose uses `env_file: .env` for its
+# *container* environment, while `${VAR}` interpolation also defaults to `.env`.
+# We must therefore apply our overrides to that one file — using a separate
+# `--env-file` only changes interpolation, leaving the container env (e.g. the
+# MySQL password the app reads back) pointing at the original `.env`, which
+# causes "Access denied" mismatches. So: reset `.env` to pristine defaults,
+# then edit it in place.
 git -C "$RAGFLOW_DIR" checkout -- docker/.env 2>/dev/null || true
-# Our overrides. Keys here replace whatever RAGFlow ships in docker/.env.
-#
-# We intentionally keep RAGFlow's shipped internal passwords (MySQL, MinIO,
-# Redis, Elasticsearch) as-is. They are only reachable on the private docker
-# network / host loopback and are never exposed publicly (the security group
-# allows 443 + 22 only, and Caddy proxies just the REST API on 9380). Overriding
-# them with values that must stay consistent across container re-init is a
-# common source of "Access denied" breakage, so we avoid it.
-declare -a OVERRIDES=(
-  "RAGFLOW_IMAGE=$RAGFLOW_IMAGE"
-  "REGISTER_ENABLED=$REGISTER_ENABLED"
-  # Free host ports 80/443 for Caddy; remap RAGFlow's built-in web ports.
-  # We only proxy the REST API (9380) publicly; the web UI ports are never
-  # exposed via the security group.
-  "SVR_WEB_HTTP_PORT=8080"
-  "SVR_WEB_HTTPS_PORT=8443"
-)
 
-# Build a deterministic merged env: start from RAGFlow's shipped .env with our
-# overridden keys stripped out, then append our values. This avoids duplicate
-# keys whose precedence differs across docker compose versions.
-OVERRIDE_KEYS=$(printf '%s\n' "${OVERRIDES[@]}" | cut -d= -f1 | paste -sd'|' -)
-grep -vE "^($OVERRIDE_KEYS)=" "$DOCKER_DIR/.env" > "$DOCKER_DIR/.env.merged" 2>/dev/null || true
-printf '%s\n' "${OVERRIDES[@]}" >> "$DOCKER_DIR/.env.merged"
+# Overrides applied directly to docker/.env. Internal service passwords (MySQL,
+# MinIO, Redis, Elasticsearch) are intentionally left at RAGFlow's shipped
+# defaults: they're only reachable on the private docker network / host
+# loopback and are never exposed publicly (security group allows 443 + 22 only;
+# Caddy proxies just the REST API on 9380).
+set_env() {
+  local key="$1" val="$2" file="$DOCKER_DIR/.env"
+  if grep -qE "^${key}=" "$file"; then
+    sed -i "s|^${key}=.*|${key}=${val}|" "$file"
+  else
+    echo "${key}=${val}" >> "$file"
+  fi
+}
+set_env RAGFLOW_IMAGE "$RAGFLOW_IMAGE"
+set_env REGISTER_ENABLED "$REGISTER_ENABLED"
+# Free host ports 80/443 for Caddy; remap RAGFlow's built-in web ports (never
+# exposed via the security group).
+set_env SVR_WEB_HTTP_PORT 8080
+set_env SVR_WEB_HTTPS_PORT 8443
 
 echo "==> Starting RAGFlow (docker compose)"
-docker compose --env-file "$DOCKER_DIR/.env.merged" -f "$DOCKER_DIR/docker-compose.yml" up -d
+docker compose -f "$DOCKER_DIR/docker-compose.yml" up -d
 
 echo "==> Configuring Caddy reverse proxy for $RAG_DOMAIN"
 sudo tee /etc/caddy/Caddyfile >/dev/null <<EOF
