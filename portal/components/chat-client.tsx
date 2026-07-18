@@ -24,11 +24,10 @@ export default function ChatClient() {
     setMessages(next);
     setLoading(true);
     try {
-      // OpenAI-compatible surface exposed by RAGFlow via the gateway.
-      const res = await fetch("/api/rag/chats/completions", {
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next, stream: false }),
+        body: JSON.stringify({ messages: next }),
       });
       if (res.status === 429) {
         setError("You've reached your monthly usage limit. Contact Runook to upgrade.");
@@ -36,11 +35,7 @@ export default function ChatClient() {
       }
       if (!res.ok) throw new Error("chat failed");
       const body = await res.json();
-      const answer =
-        body?.choices?.[0]?.message?.content ??
-        body?.data?.answer ??
-        body?.answer ??
-        "No response from engine.";
+      const answer = body?.answer || "No response from engine.";
       setMessages((m) => [...m, { role: "assistant", content: String(answer) }]);
     } catch {
       setError("Could not reach the RAG engine. It may not be connected yet.");

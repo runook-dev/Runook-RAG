@@ -13,6 +13,10 @@ export interface Customer {
   ragflowTenantId: string;
   /** RAGFlow API token scoped to that tenant. Server-side secret. */
   ragflowApiToken: string;
+  /** Lazily-created default chat assistant id for this tenant (portal chat). */
+  ragflowChatId?: string;
+  /** Composite model id RAGFlow expects, e.g. "gemini-2.5-flash@prod@Gemini". */
+  ragflowChatModel?: string;
   createdAt: string;
   status: "active" | "suspended";
 }
