@@ -32,21 +32,29 @@ git -C "$RAGFLOW_DIR" checkout "${RAGFLOW_IMAGE##*:}" --quiet || \
 
 echo "==> Writing RAGFlow docker/.env overrides"
 DOCKER_DIR="$RAGFLOW_DIR/docker"
-{
-  echo "RAGFLOW_IMAGE=$RAGFLOW_IMAGE"
-  echo "MYSQL_PASSWORD=$MYSQL_PASSWORD"
-  echo "MINIO_PASSWORD=$MINIO_PASSWORD"
-  echo "REDIS_PASSWORD=$REDIS_PASSWORD"
-  echo "ELASTIC_PASSWORD=$ELASTIC_PASSWORD"
-  echo "REGISTER_ENABLED=$REGISTER_ENABLED"
+# Our overrides. Keys here replace whatever RAGFlow ships in docker/.env.
+# Note: RAGFlow reuses MYSQL_PASSWORD as MYSQL_ROOT_PASSWORD, so it must be
+# consistent between the mysql container init and the ragflow server.
+declare -a OVERRIDES=(
+  "RAGFLOW_IMAGE=$RAGFLOW_IMAGE"
+  "MYSQL_PASSWORD=$MYSQL_PASSWORD"
+  "MINIO_PASSWORD=$MINIO_PASSWORD"
+  "REDIS_PASSWORD=$REDIS_PASSWORD"
+  "ELASTIC_PASSWORD=$ELASTIC_PASSWORD"
+  "REGISTER_ENABLED=$REGISTER_ENABLED"
   # Free host ports 80/443 for Caddy; remap RAGFlow's built-in web ports.
-  # We only proxy the REST API (9380) publicly; the web UI stays bound to
-  # loopback-only high ports and is never exposed via the security group.
-  echo "SVR_WEB_HTTP_PORT=8080"
-  echo "SVR_WEB_HTTPS_PORT=8443"
-} > "$DOCKER_DIR/.env.runook"
-# Merge our overrides onto RAGFlow's shipped .env (ours win).
-cat "$DOCKER_DIR/.env" "$DOCKER_DIR/.env.runook" 2>/dev/null > "$DOCKER_DIR/.env.merged" || cp "$DOCKER_DIR/.env.runook" "$DOCKER_DIR/.env.merged"
+  # We only proxy the REST API (9380) publicly; the web UI ports are never
+  # exposed via the security group.
+  "SVR_WEB_HTTP_PORT=8080"
+  "SVR_WEB_HTTPS_PORT=8443"
+)
+
+# Build a deterministic merged env: start from RAGFlow's shipped .env with our
+# overridden keys stripped out, then append our values. This avoids duplicate
+# keys whose precedence differs across docker compose versions.
+OVERRIDE_KEYS=$(printf '%s\n' "${OVERRIDES[@]}" | cut -d= -f1 | paste -sd'|' -)
+grep -vE "^($OVERRIDE_KEYS)=" "$DOCKER_DIR/.env" > "$DOCKER_DIR/.env.merged" 2>/dev/null || true
+printf '%s\n' "${OVERRIDES[@]}" >> "$DOCKER_DIR/.env.merged"
 
 echo "==> Starting RAGFlow (docker compose)"
 docker compose --env-file "$DOCKER_DIR/.env.merged" -f "$DOCKER_DIR/docker-compose.yml" up -d
