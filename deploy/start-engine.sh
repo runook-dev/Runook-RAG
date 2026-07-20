@@ -182,7 +182,7 @@ docker compose -f "$DOCKER_DIR/docker-compose.yml" up -d --force-recreate
 
 # Install in-container management tools (they live in the container FS and are
 # lost whenever the container is recreated, so (re)install on every start).
-for t in provision_tenant.py quota_tool.py; do
+for t in provision_tenant.py quota_tool.py list_users.py; do
   [[ -f "$HERE/$t" ]] && docker cp "$HERE/$t" "docker-ragflow-cpu-1:/ragflow/$t" 2>/dev/null || true
 done
 

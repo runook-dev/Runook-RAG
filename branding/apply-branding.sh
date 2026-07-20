@@ -132,6 +132,10 @@ fi
 # Real Google "G" logo for the "Sign in with Google" button (upstream ships a
 # SerpApi logo under this filename).
 [[ -f "$HERE/google.svg" ]] && cp "$HERE/google.svg" "$WEB/src/assets/svg/google.svg" || true
+# Remove the boxed border around the OAuth buttons (cleaner look).
+if [[ -f "$LOGIN" ]]; then
+  perl -0777 -pi -e "s/\\? 'py-8' : 'mt-3 border'/? 'py-8' : 'mt-3'/g" "$LOGIN"
+fi
 
 echo "==> Accent + sidebar CSS variables"
 sed -i.bak \

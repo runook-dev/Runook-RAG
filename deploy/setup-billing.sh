@@ -28,6 +28,7 @@ npm run build
 echo "==> Copy in-container tools"
 docker cp "$ROOT/deploy/provision_tenant.py" "$RAGFLOW_CONTAINER:/ragflow/provision_tenant.py" || true
 docker cp "$ROOT/deploy/quota_tool.py" "$RAGFLOW_CONTAINER:/ragflow/quota_tool.py" || true
+docker cp "$ROOT/deploy/list_users.py" "$RAGFLOW_CONTAINER:/ragflow/list_users.py" || true
 
 echo "==> systemd service (runook-billing)"
 sudo tee /etc/systemd/system/runook-billing.service >/dev/null <<UNIT
@@ -61,7 +62,7 @@ Type=oneshot
 User=ubuntu
 WorkingDirectory=$BILLING
 EnvironmentFile=$BILLING/.env.local
-ExecStart=/usr/bin/node scripts/enforce-quota.mjs
+ExecStart=/usr/bin/node scripts/reconcile-accounts.mjs
 UNIT
 sudo tee /etc/systemd/system/runook-quota.timer >/dev/null <<UNIT
 [Unit]
