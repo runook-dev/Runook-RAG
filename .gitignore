@@ -30,6 +30,7 @@ npm-debug.log*
 
 # Local dev store (file-backed store used when RUNOOK_STORE=local)
 /portal/.data/
+/billing/.data/
 
 # Engine secrets (EC2)
 /deploy/engine.env
