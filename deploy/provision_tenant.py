@@ -159,6 +159,18 @@ def _configure_gemini(token: str, api_key: str) -> bool:
             "model_name": "gemini-embedding-001",
         },
     )
+    # image2text / VLM: gemini-2.5-flash is multimodal, so reuse it for image
+    # understanding (PDF images, picture chunking, multimodal chat). Best-effort.
+    call(
+        "PATCH",
+        "/models/default",
+        {
+            "model_type": "image2text",
+            "model_provider": "Gemini",
+            "model_instance": "prod",
+            "model_name": "gemini-2.5-flash",
+        },
+    )
     return ok_chat and ok_embed
 
 
