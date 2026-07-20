@@ -125,6 +125,12 @@ if [[ "${RUNOOK_RESET:-0}" == "1" ]]; then
 fi
 docker compose -f "$DOCKER_DIR/docker-compose.yml" up -d --force-recreate
 
+# Install in-container management tools (they live in the container FS and are
+# lost whenever the container is recreated, so (re)install on every start).
+for t in provision_tenant.py quota_tool.py; do
+  [[ -f "$HERE/$t" ]] && docker cp "$HERE/$t" "docker-ragflow-cpu-1:/ragflow/$t" 2>/dev/null || true
+done
+
 echo "==> Configuring Caddy reverse proxy for $RAG_DOMAIN"
 # RAGFlow's own nginx (host port 8080, from SVR_WEB_HTTP_PORT) serves the
 # branded web UI AND proxies the REST API (/v1, /api). Pointing Caddy here
