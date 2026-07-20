@@ -80,6 +80,24 @@ set_env SVR_WEB_HTTPS_PORT 8443
 [[ -n "${REDIS_PASSWORD:-}" ]] && set_env REDIS_PASSWORD "$REDIS_PASSWORD"
 [[ -n "${ELASTIC_PASSWORD:-}" ]] && set_env ELASTIC_PASSWORD "$ELASTIC_PASSWORD"
 
+# SMTP (transactional email: team invites, notifications). Interpolated into
+# the service_conf smtp block below from the container env.
+[[ -n "${SMTP_SERVER:-}" ]] && set_env SMTP_SERVER "$SMTP_SERVER"
+[[ -n "${SMTP_PORT:-}" ]] && set_env SMTP_PORT "$SMTP_PORT"
+[[ -n "${SMTP_USERNAME:-}" ]] && set_env SMTP_USERNAME "$SMTP_USERNAME"
+[[ -n "${SMTP_PASSWORD:-}" ]] && set_env SMTP_PASSWORD "$SMTP_PASSWORD"
+[[ -n "${SMTP_SENDER_EMAIL:-}" ]] && set_env SMTP_SENDER_EMAIL "$SMTP_SENDER_EMAIL"
+[[ -n "${SMTP_FRONTEND_URL:-}" ]] && set_env SMTP_FRONTEND_URL "$SMTP_FRONTEND_URL"
+
+# Agent code sandbox. Enabling adds a privileged executor container with access
+# to the host docker socket (customer code runs in pooled containers).
+if [[ "${SANDBOX_ENABLED:-0}" == "1" ]]; then
+  set_env SANDBOX_ENABLED 1
+  set_env SANDBOX_HOST sandbox-executor-manager
+  # Activate the sandbox compose profile alongside the doc-engine + device ones.
+  set_env COMPOSE_PROFILES "elasticsearch,cpu,sandbox"
+fi
+
 # ---------------------------------------------------------------------------
 # Optional: Google (OIDC) login. Enabled when engine.env sets
 # OAUTH_GOOGLE_CLIENT_ID / OAUTH_GOOGLE_CLIENT_SECRET. The container entrypoint
@@ -112,6 +130,43 @@ YAML
   else
     echo "   oauth block already present in template"
   fi
+fi
+
+# ---------------------------------------------------------------------------
+# Optional: SMTP for transactional email (team invites, notifications).
+# Enabled when engine.env sets SMTP_SERVER. Appended once (idempotent).
+# ---------------------------------------------------------------------------
+if [[ -n "${SMTP_SERVER:-}" ]]; then
+  echo "==> Enabling SMTP email"
+  TPL="$DOCKER_DIR/service_conf.yaml.template"
+  if ! grep -q "RUNOOK_SMTP_BLOCK" "$TPL"; then
+    cat >> "$TPL" <<YAML
+
+# RUNOOK_SMTP_BLOCK (managed by deploy/start-engine.sh) - do not duplicate
+smtp:
+  mail_server: "\${SMTP_SERVER}"
+  mail_port: \${SMTP_PORT}
+  mail_use_ssl: true
+  mail_use_tls: false
+  mail_username: "\${SMTP_USERNAME}"
+  mail_password: "\${SMTP_PASSWORD}"
+  mail_default_sender:
+    - "Runook RAG"
+    - "\${SMTP_SENDER_EMAIL}"
+  mail_frontend_url: "\${SMTP_FRONTEND_URL}"
+YAML
+    echo "   appended smtp block to service_conf template"
+  else
+    echo "   smtp block already present in template"
+  fi
+fi
+
+# Pre-pull sandbox images so the executor is ready when the profile starts.
+if [[ "${SANDBOX_ENABLED:-0}" == "1" ]]; then
+  echo "==> Pulling sandbox images"
+  docker pull infiniflow/sandbox-executor-manager:latest || true
+  docker pull infiniflow/sandbox-base-python:latest || true
+  docker pull infiniflow/sandbox-base-nodejs:latest || true
 fi
 
 echo "==> Starting RAGFlow (docker compose)"
