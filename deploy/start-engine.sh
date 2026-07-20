@@ -129,16 +129,23 @@ echo "==> Configuring Caddy reverse proxy for $RAG_DOMAIN"
 # RAG_DOMAIN is stored comma-separated (no spaces) so shell sourcing is safe;
 # Caddy requires site addresses separated by ", " (comma + space).
 CADDY_SITES=$(echo "$RAG_DOMAIN" | sed 's/,/, /g')
-sudo tee /etc/caddy/Caddyfile >/dev/null <<EOF
-$CADDY_SITES {
-    reverse_proxy 127.0.0.1:8080
-
-    # Allow large document uploads.
-    request_body {
-        max_size 1GB
-    }
-}
-EOF
+# Optional billing site (Runook billing service on :3100). Set BILLING_DOMAIN=""
+# in engine.env to disable.
+BILLING_DOMAIN="${BILLING_DOMAIN:-pay.runook.com}"
+{
+  echo "$CADDY_SITES {"
+  echo "    reverse_proxy 127.0.0.1:8080"
+  echo "    request_body {"
+  echo "        max_size 1GB"
+  echo "    }"
+  echo "}"
+  if [[ -n "$BILLING_DOMAIN" ]]; then
+    echo "$BILLING_DOMAIN {"
+    echo "    reverse_proxy 127.0.0.1:3100"
+    echo "}"
+  fi
+} | sudo tee /etc/caddy/Caddyfile >/dev/null
 sudo systemctl reload caddy || sudo systemctl restart caddy
 
 echo "==> Up. Open: https://$RAG_DOMAIN"
+[[ -n "$BILLING_DOMAIN" ]] && echo "==> Billing: https://$BILLING_DOMAIN"
