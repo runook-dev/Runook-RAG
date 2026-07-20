@@ -117,6 +117,22 @@ done
 #    Palette: primary #00b5ff (rgb 0 181 255), bright #2dd4ff (45 212 255),
 #    deep #0066ff (0 102 255).
 # ---------------------------------------------------------------------------
+echo "==> Login page: tagline, background, Google logo"
+LOGIN="$WEB/src/pages/login-next/index.tsx"
+# Our own tagline (replaces RAGFlow's "A leading RAG engine for LLM context").
+for f in "$WEB"/src/locales/*.ts; do
+  [[ -f "$f" ]] || continue
+  sed -i.bak "s#A leading RAG engine for LLM context#Private, grounded AI over your business knowledge#g" "$f"
+done
+# Replace RAGFlow's circuit background with a Runook radial-gradient backdrop
+# (distinct dark + blue-glow look, closer to runook.com).
+if [[ -f "$LOGIN" ]]; then
+  perl -0777 -pi -e "s|<BgSvg isPaused />|<div className=\"pointer-events-none absolute inset-0 -z-10\" style={{ background: 'radial-gradient(60% 55% at 50% 0%, rgba(0,181,255,0.20), transparent 70%), radial-gradient(45% 45% at 12% 15%, rgba(0,102,255,0.16), transparent 70%), radial-gradient(45% 45% at 88% 12%, rgba(45,212,255,0.12), transparent 70%), #000000' }} />|g" "$LOGIN"
+fi
+# Real Google "G" logo for the "Sign in with Google" button (upstream ships a
+# SerpApi logo under this filename).
+[[ -f "$HERE/google.svg" ]] && cp "$HERE/google.svg" "$WEB/src/assets/svg/google.svg" || true
+
 echo "==> Accent + sidebar CSS variables"
 sed -i.bak \
   -e "s#--accent-primary: 0 190 180;#--accent-primary: 0 181 255;#g" \
