@@ -75,12 +75,16 @@ sed -i.bak "s#export const Domain = 'cloud.ragflow.io'#export const Domain = 'ra
 echo "==> Rewriting ragflow.io / github URLs"
 URL_FILES=$(grep -rlE "ragflow\.io|github\.com/infiniflow/ragflow" "$WEB/src" 2>/dev/null || true)
 if [[ -n "$URL_FILES" ]]; then
+  # URL char class excludes whitespace, backtick(\x60), apostrophe(\x27),
+  # doublequote(\x22), comma, parens and angle brackets, so we never consume the
+  # closing delimiter of a JS string / template literal.
   perl -0777 -pi -e '
-    s{https://cloud\.ragflow\.io}{https://rag.runook.com}g;
-    s{https://ragflow\.io[^\s"'"'"')]*}{https://runook.com}g;
-    s{https://github\.com/infiniflow/ragflow[^\s"'"'"')]*}{https://runook.com}g;
-    s{\bcloud\.ragflow\.io\b}{rag.runook.com}g;
-    s{\bragflow\.io\b}{runook.com}g;
+    my $u = qr/[^\s\x60\x27\x22,()<>]*/;
+    s{https?://cloud\.ragflow\.io$u}{https://rag.runook.com}g;
+    s{https?://ragflow\.io$u}{https://runook.com}g;
+    s{https?://github\.com/infiniflow/ragflow$u}{https://runook.com}g;
+    s{cloud\.ragflow\.io}{rag.runook.com}g;
+    s{ragflow\.io}{runook.com}g;
   ' $URL_FILES
 fi
 
