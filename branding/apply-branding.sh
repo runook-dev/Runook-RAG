@@ -47,7 +47,35 @@ if ! grep -q "RUNOOK_TIER_BADGE" "$WEB/index.html"; then
   /* RUNOOK_TIER_BADGE */
   (function(){
     function email(){try{return (JSON.parse(localStorage.getItem("userInfo")||"{}").email||"").toLowerCase();}catch(e){return "";}}
-    var done=false;
+    function bar(label,used,limit){
+      var unl = !limit || limit<=0;
+      var pct = unl?0:Math.min(100,Math.round(used/limit*100));
+      var right = unl?"unlimited":(used+" / "+limit);
+      return "<div style=\"margin:8px 0\"><div style=\"display:flex;justify-content:space-between;font-size:12px;color:#a1a1aa\"><span>"+label+"</span><span>"+right+"</span></div><div style=\"height:6px;background:#1f2023;border-radius:999px;margin-top:4px;overflow:hidden\"><div style=\"height:100%;width:"+pct+"%;background:linear-gradient(90deg,#2dd4ff,#0066ff)\"></div></div></div>";
+    }
+    var done=false, panel=null;
+    async function openPanel(e,anchor){
+      if(panel){panel.remove();panel=null;return;}
+      var r=await fetch("/runook/usage?email="+encodeURIComponent(e));
+      var d=await r.json();
+      if(!d||!d.plan)return;
+      panel=document.createElement("div");
+      panel.style.cssText="position:fixed;top:58px;left:16px;z-index:9999;width:300px;background:#0a0a0a;border:1px solid #1f2023;border-radius:14px;padding:16px;box-shadow:0 10px 40px rgba(0,0,0,.5);color:#fafafa;font-family:system-ui,sans-serif";
+      var u=d.usage,l=d.limits;
+      var gb=(u.storage_gb||0);
+      var html="<div style=\"font-weight:600;margin-bottom:6px\">"+d.label+" plan</div>";
+      html+=bar("Credits this month",u.credits,l.credits);
+      html+=bar("Knowledge bases",u.knowledge_bases,l.knowledge_bases);
+      html+=bar("Storage (GB)",gb,l.storage_gb);
+      html+=bar("Seats",u.seats,l.seats);
+      if(d.manageable){html+="<button id=\"runook-manage\" style=\"margin-top:10px;width:100%;padding:8px;border:0;border-radius:8px;font-size:13px;font-weight:600;color:#fff;background:linear-gradient(135deg,#2dd4ff,#0066ff);cursor:pointer\">Manage subscription</button>";}
+      else{html+="<a href=\"https://pay.runook.com\" target=\"_blank\" style=\"display:block;margin-top:10px;text-align:center;font-size:13px;color:#00b5ff\">Upgrade plan</a>";}
+      panel.innerHTML=html;
+      document.body.appendChild(panel);
+      var mb=document.getElementById("runook-manage");
+      if(mb){mb.onclick=async function(){var pr=await fetch("/runook/portal?email="+encodeURIComponent(e));var pd=await pr.json();if(pd.url)window.location.href=pd.url;};}
+      document.addEventListener("click",function h(ev){if(panel&&!panel.contains(ev.target)&&ev.target!==anchor){panel.remove();panel=null;document.removeEventListener("click",h);}});
+    }
     async function place(){
       if(done)return;
       var e=email(); if(!e)return;
@@ -56,10 +84,11 @@ if ! grep -q "RUNOOK_TIER_BADGE" "$WEB/index.html"; then
       try{
         var r=await fetch("/runook/plan?email="+encodeURIComponent(e));
         var d=await r.json();
-        if(!d||!d.label)return;
-        var pill=document.createElement("a");
-        pill.href="https://pay.runook.com"; pill.target="_blank"; pill.textContent=d.label+" plan";
-        pill.style.cssText="margin-left:10px;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;color:#fff;text-decoration:none;background:linear-gradient(135deg,#2dd4ff,#0066ff);white-space:nowrap;align-self:center;";
+        if(!d||!d.label){done=false;return;}
+        var pill=document.createElement("button");
+        pill.textContent=d.label+" plan";
+        pill.style.cssText="margin-left:10px;padding:3px 12px;border:0;border-radius:999px;font-size:12px;font-weight:600;color:#fff;background:linear-gradient(135deg,#2dd4ff,#0066ff);white-space:nowrap;align-self:center;cursor:pointer";
+        pill.onclick=function(ev){ev.stopPropagation();openPanel(e,pill);};
         var host=logo.closest("a")||logo.parentElement;
         var target=(host&&host.parentElement)?host.parentElement:host;
         if(target&&!target.querySelector("[data-runook-pill]")){pill.setAttribute("data-runook-pill","1");target.appendChild(pill);}
