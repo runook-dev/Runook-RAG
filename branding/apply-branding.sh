@@ -76,25 +76,26 @@ if ! grep -q "RUNOOK_TIER_BADGE" "$WEB/index.html"; then
       if(mb){mb.onclick=async function(){var pr=await fetch("/runook/portal?email="+encodeURIComponent(e));var pd=await pr.json();if(pd.url)window.location.href=pd.url;};}
       document.addEventListener("click",function h(ev){if(panel&&!panel.contains(ev.target)&&ev.target!==anchor){panel.remove();panel=null;document.removeEventListener("click",h);}});
     }
-    async function place(){
-      if(done)return;
+    var cache=null;
+    async function ensurePill(){
+      if(document.querySelector("[data-runook-pill]"))return;
       var e=email(); if(!e)return;
       var logo=document.querySelector("img[src=\"/logo.svg\"]"); if(!logo)return;
-      done=true;
+      var host=logo.closest("a")||logo.parentElement;
+      var target=(host&&host.parentElement)?host.parentElement:host; if(!target)return;
+      var pill=document.createElement("button");
+      pill.setAttribute("data-runook-pill","1");
+      pill.style.cssText="margin-left:10px;padding:3px 12px;border:0;border-radius:999px;font-size:12px;font-weight:600;color:#fff;background:linear-gradient(135deg,#2dd4ff,#0066ff);white-space:nowrap;align-self:center;cursor:pointer";
+      pill.textContent="Runook";
+      target.appendChild(pill);
       try{
-        var d={};
-        try{var r=await fetch("/runook/plan?email="+encodeURIComponent(e));d=await r.json();}catch(x){}
-        var pill=document.createElement("button");
-        pill.style.cssText="margin-left:10px;padding:3px 12px;border:0;border-radius:999px;font-size:12px;font-weight:600;color:#fff;background:linear-gradient(135deg,#2dd4ff,#0066ff);white-space:nowrap;align-self:center;cursor:pointer";
-        if(d&&d.label){pill.textContent=d.label+" plan";pill.onclick=function(ev){ev.stopPropagation();openPanel(e,pill);};}
-        else{pill.textContent="Upgrade";pill.onclick=function(ev){ev.stopPropagation();window.open("https://pay.runook.com","_blank");};}
-        var host=logo.closest("a")||logo.parentElement;
-        var target=(host&&host.parentElement)?host.parentElement:host;
-        if(target&&!target.querySelector("[data-runook-pill]")){pill.setAttribute("data-runook-pill","1");target.appendChild(pill);}
-        else{done=false;}
-      }catch(err){done=false;}
+        if(!cache){var r=await fetch("/runook/plan?email="+encodeURIComponent(e));cache=await r.json();}
+      }catch(x){cache={};}
+      if(cache&&cache.label){pill.textContent=cache.label+" plan";pill.onclick=function(ev){ev.stopPropagation();openPanel(e,pill);};}
+      else{pill.textContent="Upgrade";pill.onclick=function(ev){ev.stopPropagation();window.open("https://pay.runook.com","_blank");};}
     }
-    document.addEventListener("DOMContentLoaded",function(){place();new MutationObserver(place).observe(document.body,{childList:true,subtree:true});});
+    function start(){ensurePill();try{new MutationObserver(function(){ensurePill();}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){} setInterval(ensurePill,2000);}
+    if(document.readyState!=="loading"){start();}else{document.addEventListener("DOMContentLoaded",start);}
   })();
   </script>
 };
@@ -210,13 +211,17 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 if "runook/account" not in s:
-    # Use the base "CreditCard" export (the Lucide* alias is not available in
-    # every lucide-react version; base names like Columns3Cog are).
-    s = s.replace("  Columns3Cog,", "  Columns3Cog,\n  CreditCard,", 1)
+    # Inline SVG icon (no lucide import — export names vary across versions).
+    icon = (
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" '
+        'strokeLinecap="round" strokeLinejoin="round" className="size-[1em]">'
+        '<rect x="2" y="5" width="20" height="14" rx="2"></rect>'
+        '<line x1="2" y1="10" x2="22" y2="10"></line></svg>'
+    )
     li = (
         '              <li className="w-full md:w-auto">\n'
         '                <Button block variant="ghost" aria-label="Billing" className="relative h-10 text-base max-md:size-10 max-md:p-0 max-md:justify-center justify-start gap-2.5 px-2 md:px-3" onClick={() => window.open("/runook/account?email=" + encodeURIComponent(userInfo?.email || ""), "_blank")}>\n'
-        '                  <span className="flex items-center gap-2.5 max-md:gap-0"><CreditCard className="size-[1em]" /><span className="hidden md:inline">Billing</span></span>\n'
+        '                  <span className="flex items-center gap-2.5 max-md:gap-0">' + icon + '<span className="hidden md:inline">Billing</span></span>\n'
         '                </Button>\n'
         '              </li>\n'
         '        </ul>'
