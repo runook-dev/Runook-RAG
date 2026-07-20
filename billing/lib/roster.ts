@@ -8,10 +8,19 @@ import { promisify } from "node:util";
 import { config } from "./config";
 import { getStore } from "./store";
 import { listAllow } from "./allowlist";
-import { listRagflowUsers as dbListUsers } from "./ragflow-db";
 import type { PlanId } from "./plans";
 
 const execFileAsync = promisify(execFile);
+
+/** Fast user list via a lightweight pymysql query inside the ragflow container. */
+async function dbListUsers(): Promise<any[]> {
+  const { stdout } = await execFileAsync(
+    "docker",
+    ["exec", config.ragflowContainer, "/ragflow/.venv/bin/python", "/ragflow/list_users.py"],
+    { timeout: 20000 }
+  );
+  return JSON.parse(stdout.trim().split("\n").pop() || "[]");
+}
 
 export interface RosterEntry {
   email: string;
