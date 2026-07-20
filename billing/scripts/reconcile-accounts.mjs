@@ -17,7 +17,14 @@ const CONTAINER = process.env.RAGFLOW_CONTAINER ?? "docker-ragflow-cpu-1";
 const TABLE = process.env.RUNOOK_DDB_TABLE ?? "runook-rag";
 const REGION = process.env.AWS_REGION ?? "us-east-1";
 const ALWAYS_ALLOW = new Set(["admin@runook.com"]);
-const LIMITS = { trial: 500, starter: 5000, growth: 25000, business: 100000, enterprise: 0 };
+// Per-plan hard limits (0 = unlimited). Keep in sync with billing/lib/plans.ts.
+const LIMITS = {
+  trial: { credits: 500, knowledge_bases: 1, seats: 1, storage_gb: 0.2 },
+  starter: { credits: 5000, knowledge_bases: 10, seats: 3, storage_gb: 5 },
+  growth: { credits: 25000, knowledge_bases: 50, seats: 10, storage_gb: 25 },
+  business: { credits: 100000, knowledge_bases: 0, seats: 25, storage_gb: 100 },
+  enterprise: { credits: 0, knowledge_bases: 0, seats: 0, storage_gb: 0 },
+};
 
 async function dexec(args) {
   const { stdout } = await execFileAsync("docker", ["exec", CONTAINER, ...args], { timeout: 30000 });
@@ -57,20 +64,33 @@ async function main() {
       continue;
     }
 
-    // Authorized: check monthly credit quota.
+    // Authorized: enforce all plan dimensions (credits, KBs, storage, seats).
     const plan = b?.plan || a?.plan || "trial";
-    const limit = LIMITS[plan] ?? 0;
-    let over = false;
-    if (limit > 0) {
-      try {
-        const usage = JSON.parse(await py("/ragflow/quota_tool.py", "usage", u.id));
-        over = (usage.used_credits ?? 0) >= limit;
-      } catch {}
+    const limit = LIMITS[plan] || LIMITS.trial;
+    let overReason = "";
+    try {
+      const m = JSON.parse(await py("/ragflow/quota_tool.py", "metrics", u.id));
+      const checks = [
+        ["credits", m.credits],
+        ["knowledge_bases", m.knowledge_bases],
+        ["seats", m.seats],
+        ["storage_gb", m.storage_gb],
+      ];
+      for (const [k, v] of checks) {
+        const lim = limit[k];
+        if (lim && lim > 0 && v > lim) {
+          overReason = `${k} ${v}>${lim}`;
+          break;
+        }
+      }
+    } catch (e) {
+      console.error(`metrics failed for ${email}: ${e.message}`);
+      continue;
     }
-    if (over && active) {
+    if (overReason && active) {
       await py("/ragflow/quota_tool.py", "suspend", u.id);
-      console.log(`suspended (over quota): ${email}`);
-    } else if (!over && !active) {
+      console.log(`suspended (${overReason}): ${email}`);
+    } else if (!overReason && !active) {
       await py("/ragflow/quota_tool.py", "activate", u.id);
       console.log(`reactivated: ${email}`);
     }

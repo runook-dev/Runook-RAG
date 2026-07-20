@@ -37,6 +37,43 @@ echo "==> Browser title + app name"
 sed -i.bak "s#<title>RAGFlow</title>#<title>${BRAND}</title>#" "$WEB/index.html"
 sed -i.bak "s#\"appName\": \"RAGFlow\"#\"appName\": \"${BRAND}\"#" "$WEB/src/conf.json"
 
+echo "==> In-product tier badge"
+# Self-contained script: reads the logged-in user's email from localStorage and
+# shows their Runook plan as a pill near the logo. Same-origin /runook/plan is
+# served by the billing service via Caddy. Idempotent (guarded by a marker).
+if ! grep -q "RUNOOK_TIER_BADGE" "$WEB/index.html"; then
+  perl -0777 -pi -e '
+    my $s = q{  <script>
+  /* RUNOOK_TIER_BADGE */
+  (function(){
+    function email(){try{return (JSON.parse(localStorage.getItem("userInfo")||"{}").email||"").toLowerCase();}catch(e){return "";}}
+    var done=false;
+    async function place(){
+      if(done)return;
+      var e=email(); if(!e)return;
+      var logo=document.querySelector("img[src=\"/logo.svg\"]"); if(!logo)return;
+      done=true;
+      try{
+        var r=await fetch("/runook/plan?email="+encodeURIComponent(e));
+        var d=await r.json();
+        if(!d||!d.label)return;
+        var pill=document.createElement("a");
+        pill.href="https://pay.runook.com"; pill.target="_blank"; pill.textContent=d.label+" plan";
+        pill.style.cssText="margin-left:10px;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;color:#fff;text-decoration:none;background:linear-gradient(135deg,#2dd4ff,#0066ff);white-space:nowrap;align-self:center;";
+        var host=logo.closest("a")||logo.parentElement;
+        var target=(host&&host.parentElement)?host.parentElement:host;
+        if(target&&!target.querySelector("[data-runook-pill]")){pill.setAttribute("data-runook-pill","1");target.appendChild(pill);}
+        else{done=false;}
+      }catch(err){done=false;}
+    }
+    document.addEventListener("DOMContentLoaded",function(){place();new MutationObserver(place).observe(document.body,{childList:true,subtree:true});});
+  })();
+  </script>
+};
+    s{</body>}{$s</body>};
+  ' "$WEB/index.html"
+fi
+
 # ---------------------------------------------------------------------------
 # 1. Remove entry points to RAGFlow properties
 # ---------------------------------------------------------------------------

@@ -199,7 +199,13 @@ CADDY_SITES=$(echo "$RAG_DOMAIN" | sed 's/,/, /g')
 BILLING_DOMAIN="${BILLING_DOMAIN:-pay.runook.com}"
 {
   echo "$CADDY_SITES {"
-  echo "    reverse_proxy 127.0.0.1:8080"
+  # Same-origin Runook billing endpoints (e.g. /runook/plan for the tier badge).
+  echo "    handle /runook/* {"
+  echo "        reverse_proxy 127.0.0.1:3100"
+  echo "    }"
+  echo "    handle {"
+  echo "        reverse_proxy 127.0.0.1:8080"
+  echo "    }"
   echo "    request_body {"
   echo "        max_size 1GB"
   echo "    }"
