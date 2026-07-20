@@ -42,6 +42,26 @@ async function scan(prefix, sk) {
   return (r.Items ?? []).filter((x) => String(x.PK ?? "").startsWith(prefix));
 }
 
+// Policy: FREEMIUM. Every new signup gets a limited Trial automatically so
+// login always works; Trials expire after TRIAL_DAYS. Set RUNOOK_PAID_ONLY=1
+// to instead hard-block anyone who isn't a paying subscriber or allowlisted.
+const PAID_ONLY = process.env.RUNOOK_PAID_ONLY === "1";
+const TRIAL_DAYS = Number(process.env.RUNOOK_TRIAL_DAYS ?? 14);
+
+async function grantTrial(email) {
+  const { DynamoDBClient } = await import("@aws-sdk/client-dynamodb");
+  const { DynamoDBDocumentClient, PutCommand } = await import("@aws-sdk/lib-dynamodb");
+  const c = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }));
+  const now = new Date().toISOString();
+  await c.send(
+    new PutCommand({
+      TableName: TABLE,
+      Item: { PK: `ALLOW#${email}`, SK: "ALLOW", email, plan: "trial", note: "auto-trial", grantedAt: now },
+    })
+  );
+  return now;
+}
+
 async function main() {
   const users = JSON.parse(await py("/ragflow/list_users.py"));
   const billing = await scan("BILL#", "PROFILE");
@@ -53,30 +73,55 @@ async function main() {
     const email = String(u.email || "").toLowerCase();
     const active = String(u.is_active) === "1";
     const b = billingByEmail.get(email);
-    const a = allowByEmail.get(email);
-    const authorized = b?.status === "active" || !!a || u.is_superuser || ALWAYS_ALLOW.has(email);
+    let a = allowByEmail.get(email);
+    const privileged = u.is_superuser || ALWAYS_ALLOW.has(email);
 
-    if (!authorized) {
+    // Resolve plan + when access was granted (for trial expiry).
+    let plan, grantedAt;
+    if (b?.status === "active") {
+      plan = b.plan;
+    } else if (a) {
+      plan = a.plan;
+      grantedAt = a.grantedAt;
+    } else if (privileged) {
+      plan = "business";
+    } else if (PAID_ONLY) {
+      // Hard-block mode: no subscription -> suspend.
       if (active) {
         await py("/ragflow/quota_tool.py", "suspend", u.id);
-        console.log(`suspended (unauthorized): ${email}`);
+        console.log(`suspended (no subscription): ${email}`);
       }
       continue;
+    } else {
+      // Freemium: auto-grant a Trial on first sight so login works.
+      grantedAt = await grantTrial(email);
+      plan = "trial";
+      console.log(`auto-trial: ${email}`);
     }
 
-    // Authorized: enforce all plan dimensions (credits, KBs, storage, seats).
-    const plan = b?.plan || a?.plan || "trial";
-    const limit = LIMITS[plan] || LIMITS.trial;
+    // Trial expiry.
+    if (plan === "trial" && grantedAt && !privileged) {
+      const ageDays = (Date.now() - new Date(grantedAt).getTime()) / 86400000;
+      if (ageDays > TRIAL_DAYS) {
+        if (active) {
+          await py("/ragflow/quota_tool.py", "suspend", u.id);
+          console.log(`suspended (trial expired): ${email}`);
+        }
+        continue;
+      }
+    }
+
+    // Enforce all plan dimensions (credits, KBs, storage, seats).
+    const limit = privileged ? { credits: 0, knowledge_bases: 0, seats: 0, storage_gb: 0 } : LIMITS[plan] || LIMITS.trial;
     let overReason = "";
     try {
       const m = JSON.parse(await py("/ragflow/quota_tool.py", "metrics", u.id));
-      const checks = [
+      for (const [k, v] of [
         ["credits", m.credits],
         ["knowledge_bases", m.knowledge_bases],
         ["seats", m.seats],
         ["storage_gb", m.storage_gb],
-      ];
-      for (const [k, v] of checks) {
+      ]) {
         const lim = limit[k];
         if (lim && lim > 0 && v > lim) {
           overReason = `${k} ${v}>${lim}`;
