@@ -5,7 +5,7 @@
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/lib/store";
-import { listAllow } from "@/lib/allowlist";
+import { getAllow } from "@/lib/allowlist";
 import { PLANS, type PlanId } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
@@ -14,18 +14,13 @@ export async function GET(req: Request) {
   const email = (new URL(req.url).searchParams.get("email") || "").toLowerCase();
   if (!email) return NextResponse.json({ plan: null, label: null });
 
-  let plan: PlanId | null = null;
+  // Precedence: admin override > active billing > trial (freemium default).
+  const override = await getAllow(email);
   const billing = await getStore().getByEmail(email);
-  if (billing?.status === "active") {
-    plan = billing.plan;
-  } else {
-    const allow = (await listAllow()).find((a) => a.email.toLowerCase() === email);
-    if (allow) plan = allow.plan;
-  }
+  let plan: PlanId = override?.plan ?? (billing?.status === "active" ? billing.plan : "trial");
 
-  if (!plan) return NextResponse.json({ plan: null, label: null });
   return NextResponse.json(
-    { plan, label: PLANS[plan].name },
-    { headers: { "cache-control": "private, max-age=60" } }
+    { plan, label: PLANS[plan].name, blocked: !!override?.blocked },
+    { headers: { "cache-control": "no-store" } }
   );
 }

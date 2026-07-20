@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAdminRequest } from "@/lib/admin-auth";
-import { grant, revoke } from "@/lib/allowlist";
+import { grant, revoke, setBlocked } from "@/lib/allowlist";
 import { setUserActive } from "@/lib/roster";
 import { provisionTenant } from "@/lib/provision";
 import type { PlanId } from "@/lib/plans";
@@ -34,21 +34,26 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true, tenantId: prov.tenantId, tempPassword: prov.tempPassword });
       }
       case "grant":
+        // Authoritative plan override (beats billing). Clears any block + activates.
         if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
         await grant(email, (plan as PlanId) ?? "trial", note);
         if (tenantId) await setUserActive(tenantId, true);
         break;
       case "revoke":
+        // Remove the override; account falls back to billing plan or trial.
         if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
         await revoke(email);
-        if (tenantId) await setUserActive(tenantId, false);
         break;
       case "suspend":
-        if (!tenantId) return NextResponse.json({ error: "tenantId required" }, { status: 400 });
+        // Persistent block — reconciliation will keep it suspended.
+        if (!email || !tenantId) return NextResponse.json({ error: "email + tenantId required" }, { status: 400 });
+        await setBlocked(email, true, (plan as PlanId) ?? "trial");
         await setUserActive(tenantId, false);
         break;
       case "activate":
-        if (!tenantId) return NextResponse.json({ error: "tenantId required" }, { status: 400 });
+        // Unblock + activate.
+        if (!email || !tenantId) return NextResponse.json({ error: "email + tenantId required" }, { status: 400 });
+        await setBlocked(email, false, (plan as PlanId) ?? "trial");
         await setUserActive(tenantId, true);
         break;
     }

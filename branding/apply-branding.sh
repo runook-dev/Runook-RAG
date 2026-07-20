@@ -91,8 +91,9 @@ if ! grep -q "RUNOOK_TIER_BADGE" "$WEB/index.html"; then
       try{
         if(!cache){var r=await fetch("/runook/plan?email="+encodeURIComponent(e));cache=await r.json();}
       }catch(x){cache={};}
-      if(cache&&cache.label){pill.textContent=cache.label+" plan";pill.onclick=function(ev){ev.stopPropagation();openPanel(e,pill);};}
-      else{pill.textContent="Upgrade";pill.onclick=function(ev){ev.stopPropagation();window.open("https://pay.runook.com","_blank");};}
+      pill.onclick=function(ev){ev.stopPropagation();openPanel(e,pill);};
+      if(cache&&cache.label&&cache.plan&&cache.plan!=="trial"){pill.textContent=cache.label+" plan";}
+      else{pill.textContent="Upgrade";}
     }
     function start(){ensurePill();try{new MutationObserver(function(){ensurePill();}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){} setInterval(ensurePill,2000);}
     if(document.readyState!=="loading"){start();}else{document.addEventListener("DOMContentLoaded",start);}

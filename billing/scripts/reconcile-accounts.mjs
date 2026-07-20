@@ -73,27 +73,34 @@ async function main() {
     const email = String(u.email || "").toLowerCase();
     const active = String(u.is_active) === "1";
     const b = billingByEmail.get(email);
-    let a = allowByEmail.get(email);
+    const a = allowByEmail.get(email); // admin override — authoritative
     const privileged = u.is_superuser || ALWAYS_ALLOW.has(email);
 
-    // Resolve plan + when access was granted (for trial expiry).
+    // Admin block is persistent and wins over everything (except superusers).
+    if (a?.blocked && !privileged) {
+      if (active) {
+        await py("/ragflow/quota_tool.py", "suspend", u.id);
+        console.log(`suspended (admin block): ${email}`);
+      }
+      continue;
+    }
+
+    // Plan precedence: admin override > active billing > trial (freemium).
     let plan, grantedAt;
-    if (b?.status === "active") {
-      plan = b.plan;
-    } else if (a) {
+    if (a) {
       plan = a.plan;
       grantedAt = a.grantedAt;
+    } else if (b?.status === "active") {
+      plan = b.plan;
     } else if (privileged) {
       plan = "business";
     } else if (PAID_ONLY) {
-      // Hard-block mode: no subscription -> suspend.
       if (active) {
         await py("/ragflow/quota_tool.py", "suspend", u.id);
         console.log(`suspended (no subscription): ${email}`);
       }
       continue;
     } else {
-      // Freemium: auto-grant a Trial on first sight so login works.
       grantedAt = await grantTrial(email);
       plan = "trial";
       console.log(`auto-trial: ${email}`);

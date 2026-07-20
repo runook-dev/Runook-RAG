@@ -48,22 +48,28 @@ export async function buildRoster(): Promise<RosterEntry[]> {
     const email = (u.email || "").toLowerCase();
     const billing = await store.getByEmail(email);
     const billingActive = billing?.status === "active";
-    const allowEntry = allowByEmail.get(email);
-    const isSuper = !!u.is_superuser;
+    const override = allowByEmail.get(email); // admin override — authoritative
+    const isSuper = !!u.is_superuser || ALWAYS_ALLOW.has(email);
 
-    let source: RosterEntry["source"] = "unmanaged";
-    let plan: PlanId | undefined;
-    if (billing) {
-      source = "billing";
-      plan = billing.plan;
-    } else if (allowEntry) {
+    // Precedence: admin override > active billing > trial (freemium default).
+    let source: RosterEntry["source"];
+    let plan: PlanId;
+    if (override) {
       source = "allowlist";
-      plan = allowEntry.plan;
-    } else if (isSuper || ALWAYS_ALLOW.has(email)) {
+      plan = override.plan;
+    } else if (billingActive) {
+      source = "billing";
+      plan = billing!.plan;
+    } else if (isSuper) {
       source = "superuser";
+      plan = "business";
+    } else {
+      source = "unmanaged";
+      plan = "trial";
     }
 
-    const authorized = billingActive || !!allowEntry || isSuper || ALWAYS_ALLOW.has(email);
+    const blocked = !!override?.blocked;
+    const authorized = isSuper || !blocked;
 
     roster.push({
       email,

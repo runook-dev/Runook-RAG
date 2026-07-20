@@ -4,7 +4,7 @@
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/lib/store";
-import { listAllow } from "@/lib/allowlist";
+import { getAllow } from "@/lib/allowlist";
 import { getMetrics, getTenantIdByEmail } from "@/lib/metrics";
 import { PLANS, type PlanId } from "@/lib/plans";
 
@@ -14,19 +14,12 @@ export async function GET(req: Request) {
   const email = (new URL(req.url).searchParams.get("email") || "").toLowerCase();
   if (!email) return NextResponse.json({ plan: null });
 
+  // Precedence: admin override > active billing > trial (freemium default).
+  const override = await getAllow(email);
   const billing = await getStore().getByEmail(email);
-  let plan: PlanId | null = null;
+  const plan: PlanId = override?.plan ?? (billing?.status === "active" ? billing.plan : "trial");
+  const manageable = !override && billing?.status === "active" && !!billing.stripeCustomerId;
   let tenantId: string | undefined = billing?.ragflowTenantId;
-  let manageable = false;
-
-  if (billing?.status === "active") {
-    plan = billing.plan;
-    manageable = !!billing.stripeCustomerId;
-  } else {
-    const allow = (await listAllow()).find((a) => a.email.toLowerCase() === email);
-    if (allow) plan = allow.plan;
-  }
-  if (!plan) return NextResponse.json({ plan: null });
 
   if (!tenantId) tenantId = (await getTenantIdByEmail(email)) ?? undefined;
   const usage = tenantId ? await getMetrics(tenantId) : null;

@@ -185,11 +185,11 @@ export default function AdminConsole() {
                   {!r.isSuperuser && (
                     <>
                       {r.active ? (
-                        <button onClick={() => act({ action: "suspend", tenantId: r.tenantId }, r.email + "s")} disabled={!!busy} className="text-xs text-[var(--muted)] hover:underline">
+                        <button onClick={() => act({ action: "suspend", email: r.email, tenantId: r.tenantId, plan: r.plan }, r.email + "s")} disabled={!!busy} className="text-xs text-[var(--muted)] hover:underline">
                           suspend
                         </button>
                       ) : (
-                        <button onClick={() => act({ action: "activate", tenantId: r.tenantId }, r.email + "a")} disabled={!!busy} className="text-xs text-[var(--accent)] hover:underline">
+                        <button onClick={() => act({ action: "activate", email: r.email, tenantId: r.tenantId, plan: r.plan }, r.email + "a")} disabled={!!busy} className="text-xs text-[var(--accent)] hover:underline">
                           activate
                         </button>
                       )}
