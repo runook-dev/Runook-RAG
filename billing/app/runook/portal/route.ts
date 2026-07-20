@@ -17,13 +17,17 @@ export async function GET(req: Request) {
   if (!billing?.stripeCustomerId) {
     return NextResponse.json({ error: "no subscription" }, { status: 404 });
   }
+  const redirectMode = new URL(req.url).searchParams.get("redirect") === "1";
   try {
     const session = await stripe.billingPortal.sessions.create({
       customer: billing.stripeCustomerId,
       return_url: config.appUrl,
     });
+    // Navigations (?redirect=1) 302 straight to Stripe; fetch() callers get JSON.
+    if (redirectMode) return NextResponse.redirect(session.url, 303);
     return NextResponse.json({ url: session.url });
   } catch (e) {
+    if (redirectMode) return NextResponse.redirect(`${config.appUrl}`, 303);
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
