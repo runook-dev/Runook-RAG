@@ -24,8 +24,21 @@ export const config = {
   dynamoTable: process.env.RUNOOK_DDB_TABLE ?? "runook-rag",
   awsRegion: process.env.AWS_REGION ?? "us-east-1",
 
-  // Admin dashboard access (simple shared token; set in env).
+  // Admin dashboard access (shared token still accepted for scripts/API).
   adminToken: process.env.RUNOOK_ADMIN_DASH_TOKEN ?? "",
+  // Staff admin login (professional session auth for the back-office UI).
+  adminEmail: (process.env.RUNOOK_ADMIN_EMAIL ?? "").toLowerCase(),
+  adminPassword: process.env.RUNOOK_ADMIN_PASSWORD ?? "",
+  adminSessionSecret: process.env.RUNOOK_ADMIN_SESSION_SECRET ?? process.env.RUNOOK_ADMIN_DASH_TOKEN ?? "runook-admin",
+
+  // Direct read access to RAGFlow's MySQL (host-mapped) for a fast account list.
+  mysql: {
+    host: process.env.RAGFLOW_MYSQL_HOST ?? "127.0.0.1",
+    port: Number(process.env.RAGFLOW_MYSQL_PORT ?? 3306),
+    user: process.env.RAGFLOW_MYSQL_USER ?? "root",
+    password: process.env.RAGFLOW_MYSQL_PASSWORD ?? "infini_rag_flow",
+    database: process.env.RAGFLOW_MYSQL_DB ?? "rag_flow",
+  },
 
   // Optional transactional email (Resend) to send login details.
   resendApiKey: process.env.RESEND_API_KEY ?? "",

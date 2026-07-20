@@ -8,15 +8,16 @@ import { promisify } from "node:util";
 import { config } from "./config";
 import { getStore } from "./store";
 import { listAllow } from "./allowlist";
+import { listRagflowUsers as dbListUsers } from "./ragflow-db";
 import type { PlanId } from "./plans";
 
 const execFileAsync = promisify(execFile);
 
 export interface RosterEntry {
   email: string;
-  nickname?: string;
+  nickname?: string | null;
   tenantId: string;
-  loginChannel?: string;
+  loginChannel?: string | null;
   isSuperuser: boolean;
   active: boolean; // RAGFlow is_active
   source: "billing" | "allowlist" | "superuser" | "unmanaged";
@@ -28,17 +29,8 @@ export interface RosterEntry {
 /** The Runook staff/owner account is always authorized. */
 const ALWAYS_ALLOW = new Set(["admin@runook.com"]);
 
-export async function listRagflowUsers(): Promise<any[]> {
-  const { stdout } = await execFileAsync(
-    "docker",
-    ["exec", config.ragflowContainer, "/ragflow/.venv/bin/python", "/ragflow/list_users.py"],
-    { timeout: 30000 }
-  );
-  return JSON.parse(stdout.trim().split("\n").pop() || "[]");
-}
-
 export async function buildRoster(): Promise<RosterEntry[]> {
-  const [users, allow] = await Promise.all([listRagflowUsers(), listAllow()]);
+  const [users, allow] = await Promise.all([dbListUsers(), listAllow()]);
   const store = getStore();
   const allowByEmail = new Map(allow.map((a) => [a.email.toLowerCase(), a]));
 
@@ -66,9 +58,9 @@ export async function buildRoster(): Promise<RosterEntry[]> {
 
     roster.push({
       email,
-      nickname: u.nickname,
+      nickname: u.nickname ?? undefined,
       tenantId: u.id,
-      loginChannel: u.login_channel,
+      loginChannel: u.login_channel ?? undefined,
       isSuperuser: isSuper,
       active: String(u.is_active) === "1",
       source,

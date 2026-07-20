@@ -1,20 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { config } from "@/lib/config";
+import { isAdminRequest } from "@/lib/admin-auth";
 import { grant, revoke } from "@/lib/allowlist";
 import { setUserActive } from "@/lib/roster";
+import { provisionTenant } from "@/lib/provision";
 import type { PlanId } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
-function authorized(req: Request, token?: string): boolean {
-  const t = token || req.headers.get("x-admin-token");
-  return !!config.adminToken && t === config.adminToken;
-}
-
 const schema = z.object({
-  token: z.string(),
-  action: z.enum(["grant", "revoke", "suspend", "activate"]),
+  action: z.enum(["open", "grant", "revoke", "suspend", "activate"]),
   email: z.string().email().optional(),
   tenantId: z.string().optional(),
   plan: z.enum(["trial", "starter", "growth", "business", "enterprise"]).optional(),
@@ -22,13 +17,22 @@ const schema = z.object({
 });
 
 export async function POST(req: Request) {
+  if (!(await isAdminRequest(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = schema.safeParse(await req.json().catch(() => null));
   if (!body.success) return NextResponse.json({ error: "invalid" }, { status: 400 });
-  if (!authorized(req, body.data.token)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { action, email, tenantId, plan, note } = body.data;
   try {
     switch (action) {
+      case "open": {
+        // Provision a brand-new workspace for an email + grant a plan.
+        if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
+        const prov = await provisionTenant(email, email.split("@")[0]);
+        if (!prov.ok) return NextResponse.json({ error: prov.error || "provision failed" }, { status: 502 });
+        await grant(email, (plan as PlanId) ?? "trial", note);
+        if (prov.tenantId) await setUserActive(prov.tenantId, true);
+        return NextResponse.json({ ok: true, tenantId: prov.tenantId, tempPassword: prov.tempPassword });
+      }
       case "grant":
         if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
         await grant(email, (plan as PlanId) ?? "trial", note);
