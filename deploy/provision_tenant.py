@@ -159,13 +159,14 @@ def _configure_gemini(token: str, api_key: str) -> bool:
             "model_name": "gemini-embedding-001",
         },
     )
-    # image2text / VLM: gemini-2.5-flash is multimodal, so reuse it for image
-    # understanding (PDF images, picture chunking, multimodal chat). Best-effort.
+    # Vision / image2text: gemini-2.5-flash is multimodal, so reuse it for image
+    # understanding (PDF images, picture chunking, multimodal chat). The default
+    # endpoint uses the model_type "vision" for this slot. Best-effort.
     call(
         "PATCH",
         "/models/default",
         {
-            "model_type": "image2text",
+            "model_type": "vision",
             "model_provider": "Gemini",
             "model_instance": "prod",
             "model_name": "gemini-2.5-flash",
