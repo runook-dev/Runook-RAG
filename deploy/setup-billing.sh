@@ -11,6 +11,9 @@ ROOT="$(cd "$HERE/.." && pwd)"
 BILLING="$(cd "$ROOT/billing" && pwd)"
 RAGFLOW_CONTAINER="${RAGFLOW_CONTAINER:-docker-ragflow-cpu-1}"
 
+echo "==> Ensure the service user can run docker (for provisioning)"
+sudo usermod -aG docker ubuntu || true
+
 echo "==> Node.js 20"
 if ! command -v node >/dev/null 2>&1 || [[ "$(node -v | cut -dv -f2 | cut -d. -f1)" -lt 20 ]]; then
   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
