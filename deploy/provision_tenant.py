@@ -109,12 +109,13 @@ def main() -> int:
             print(json.dumps({"ok": False, "error": "APITokenService.save failed"}))
             return 1
 
-    # Configure the shared LLM provider (Google Gemini) for this tenant so the
-    # workspace works out of the box. Uses the tenant's own token against the
-    # local REST API (same sequence proven for the admin tenant). Idempotent.
+    # Model provider is user-selected, consistent with RAGFlow: new tenants land
+    # on the "Model providers" page and add whatever provider/key they want. We
+    # only auto-configure a default provider when explicitly opted in via
+    # RUNOOK_DEFAULT_LLM=gemini (off by default). Idempotent.
     gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
     gemini_ready = False
-    if gemini_key:
+    if gemini_key and os.environ.get("RUNOOK_DEFAULT_LLM", "").strip().lower() == "gemini":
         gemini_ready = _configure_gemini(token, gemini_key)
 
     print(json.dumps({"ok": True, "tenant_id": tenant_id, "api_token": token, "gemini": gemini_ready}))

@@ -37,72 +37,24 @@ echo "==> Browser title + app name"
 sed -i.bak "s#<title>RAGFlow</title>#<title>${BRAND}</title>#" "$WEB/index.html"
 sed -i.bak "s#\"appName\": \"RAGFlow\"#\"appName\": \"${BRAND}\"#" "$WEB/src/conf.json"
 
-echo "==> In-product tier badge"
-# Self-contained script: reads the logged-in user's email from localStorage and
-# shows their Runook plan as a pill near the logo. Same-origin /runook/plan is
-# served by the billing service via Caddy. Idempotent (guarded by a marker).
-if ! grep -q "RUNOOK_TIER_BADGE" "$WEB/index.html"; then
-  perl -0777 -pi -e '
-    my $s = q{  <script>
-  /* RUNOOK_TIER_BADGE */
-  (function(){
-    function email(){try{return (JSON.parse(localStorage.getItem("userInfo")||"{}").email||"").toLowerCase();}catch(e){return "";}}
-    function bar(label,used,limit){
-      var unl = !limit || limit<=0;
-      var pct = unl?0:Math.min(100,Math.round(used/limit*100));
-      var right = unl?"unlimited":(used+" / "+limit);
-      return "<div style=\"margin:8px 0\"><div style=\"display:flex;justify-content:space-between;font-size:12px;color:#a1a1aa\"><span>"+label+"</span><span>"+right+"</span></div><div style=\"height:6px;background:#1f2023;border-radius:999px;margin-top:4px;overflow:hidden\"><div style=\"height:100%;width:"+pct+"%;background:linear-gradient(90deg,#2dd4ff,#0066ff)\"></div></div></div>";
-    }
-    var done=false, panel=null;
-    async function openPanel(e,anchor){
-      if(panel){panel.remove();panel=null;return;}
-      var r=await fetch("/runook/usage?email="+encodeURIComponent(e));
-      var d=await r.json();
-      if(!d||!d.plan)return;
-      panel=document.createElement("div");
-      panel.style.cssText="position:fixed;top:58px;left:16px;z-index:9999;width:300px;background:#0a0a0a;border:1px solid #1f2023;border-radius:14px;padding:16px;box-shadow:0 10px 40px rgba(0,0,0,.5);color:#fafafa;font-family:system-ui,sans-serif";
-      var u=d.usage,l=d.limits;
-      var gb=(u.storage_gb||0);
-      var html="<div style=\"font-weight:600;margin-bottom:6px\">"+d.label+" plan</div>";
-      html+=bar("Credits this month",u.credits,l.credits);
-      html+=bar("Knowledge bases",u.knowledge_bases,l.knowledge_bases);
-      html+=bar("Storage (GB)",gb,l.storage_gb);
-      html+=bar("Seats",u.seats,l.seats);
-      if(d.manageable){html+="<button id=\"runook-manage\" style=\"margin-top:10px;width:100%;padding:8px;border:0;border-radius:8px;font-size:13px;font-weight:600;color:#fff;background:linear-gradient(135deg,#2dd4ff,#0066ff);cursor:pointer\">Manage subscription</button>";}
-      else{html+="<a href=\"https://pay.runook.com\" target=\"_blank\" style=\"display:block;margin-top:10px;text-align:center;font-size:13px;color:#00b5ff\">Upgrade plan</a>";}
-      panel.innerHTML=html;
-      document.body.appendChild(panel);
-      var mb=document.getElementById("runook-manage");
-      if(mb){mb.onclick=async function(){var pr=await fetch("/runook/portal?email="+encodeURIComponent(e));var pd=await pr.json();if(pd.url)window.location.href=pd.url;};}
-      document.addEventListener("click",function h(ev){if(panel&&!panel.contains(ev.target)&&ev.target!==anchor){panel.remove();panel=null;document.removeEventListener("click",h);}});
-    }
-    var cache=null;
-    async function ensurePill(){
-      if(document.querySelector("[data-runook-pill]"))return;
-      var e=email(); if(!e)return;
-      var logo=document.querySelector("img[src=\"/logo.svg\"]"); if(!logo)return;
-      var host=logo.closest("a")||logo.parentElement;
-      var target=(host&&host.parentElement)?host.parentElement:host; if(!target)return;
-      var pill=document.createElement("button");
-      pill.setAttribute("data-runook-pill","1");
-      pill.style.cssText="margin-left:10px;padding:3px 12px;border:0;border-radius:999px;font-size:12px;font-weight:600;color:#fff;background:linear-gradient(135deg,#2dd4ff,#0066ff);white-space:nowrap;align-self:center;cursor:pointer";
-      pill.textContent="Runook";
-      target.appendChild(pill);
-      try{
-        if(!cache){var r=await fetch("/runook/plan?email="+encodeURIComponent(e));cache=await r.json();}
-      }catch(x){cache={};}
-      pill.onclick=function(ev){ev.stopPropagation();openPanel(e,pill);};
-      if(cache&&cache.label&&cache.plan&&cache.plan!=="trial"){pill.textContent=cache.label+" plan";}
-      else{pill.textContent="Upgrade";}
-    }
-    function start(){ensurePill();try{new MutationObserver(function(){ensurePill();}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){} setInterval(ensurePill,2000);}
-    if(document.readyState!=="loading"){start();}else{document.addEventListener("DOMContentLoaded",start);}
-  })();
-  </script>
-};
-    s{</body>}{$s</body>};
-  ' "$WEB/index.html"
-fi
+echo "==> In-product Upgrade / plan badge (React component in header)"
+# Real React component mounted next to the top-left logo. Uses useFetchUserInfo
+# + /runook/plan, so it renders reliably: trial/unmanaged -> "Upgrade", paid ->
+# "<Plan> plan". Clicking opens the in-app Billing settings page. Idempotent.
+cp "$HERE/plan-badge.tsx" "$WEB/src/components/runook-plan-badge.tsx"
+HEADER="$WEB/src/layouts/components/header.tsx"
+[[ -f "$HEADER" ]] && python3 - "$HEADER" <<'PYEOF'
+import sys
+p = sys.argv[1]; s = open(p).read()
+if "RunookPlanBadge" not in s:
+    imp = "import { useHeaderNavLayout } from './use-header-nav-layout';"
+    s = s.replace(imp, imp + "\nimport { RunookPlanBadge } from '@/components/runook-plan-badge';", 1)
+    anchor = ("              <img src={'/logo.svg'} alt=\"RAGFlow logo\" className=\"size-10\" />\n"
+              "            </Link>\n"
+              "          </div>")
+    s = s.replace(anchor, anchor + "\n          <RunookPlanBadge />", 1)
+    open(p, "w").write(s)
+PYEOF
 
 # ---------------------------------------------------------------------------
 # 1. Remove entry points to RAGFlow properties
