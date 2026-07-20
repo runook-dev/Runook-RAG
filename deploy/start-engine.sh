@@ -76,6 +76,40 @@ set_env SVR_WEB_HTTPS_PORT 8443
 [[ -n "${REDIS_PASSWORD:-}" ]] && set_env REDIS_PASSWORD "$REDIS_PASSWORD"
 [[ -n "${ELASTIC_PASSWORD:-}" ]] && set_env ELASTIC_PASSWORD "$ELASTIC_PASSWORD"
 
+# ---------------------------------------------------------------------------
+# Optional: Google (OIDC) login. Enabled when engine.env sets
+# OAUTH_GOOGLE_CLIENT_ID / OAUTH_GOOGLE_CLIENT_SECRET. The container entrypoint
+# interpolates ${...} in service_conf.yaml.template from the container env
+# (which comes from docker/.env), so we push the creds there and append a
+# google OIDC block to the template once (idempotent, guarded by a marker).
+# ---------------------------------------------------------------------------
+if [[ -n "${OAUTH_GOOGLE_CLIENT_ID:-}" && -n "${OAUTH_GOOGLE_CLIENT_SECRET:-}" ]]; then
+  echo "==> Enabling Google (OIDC) login"
+  set_env OAUTH_GOOGLE_CLIENT_ID "$OAUTH_GOOGLE_CLIENT_ID"
+  set_env OAUTH_GOOGLE_CLIENT_SECRET "$OAUTH_GOOGLE_CLIENT_SECRET"
+  OAUTH_REDIRECT="${OAUTH_GOOGLE_REDIRECT:-https://rag.runook.com/api/v1/auth/oauth/google/callback}"
+  TPL="$DOCKER_DIR/service_conf.yaml.template"
+  if ! grep -q "RUNOOK_OAUTH_BLOCK" "$TPL"; then
+    cat >> "$TPL" <<YAML
+
+# RUNOOK_OAUTH_BLOCK (managed by deploy/start-engine.sh) - do not duplicate
+oauth:
+  google:
+    type: "oidc"
+    icon: "google"
+    display_name: "Google"
+    client_id: "\${OAUTH_GOOGLE_CLIENT_ID}"
+    client_secret: "\${OAUTH_GOOGLE_CLIENT_SECRET}"
+    issuer: "https://accounts.google.com"
+    scope: "openid email profile"
+    redirect_uri: "${OAUTH_REDIRECT}"
+YAML
+    echo "   appended google oauth block to service_conf template"
+  else
+    echo "   oauth block already present in template"
+  fi
+fi
+
 echo "==> Starting RAGFlow (docker compose)"
 # --force-recreate ensures every container picks up the current docker/.env,
 # rather than reusing a stale container created from an earlier env.
