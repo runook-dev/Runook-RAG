@@ -71,6 +71,10 @@ set_env SVR_WEB_HTTPS_PORT 8443
 # init. If you CHANGE a password after the first boot you must wipe that
 # volume, or the service will reject the new password ("Access denied"):
 #   docker compose -f ragflow/docker/docker-compose.yml down -v
+# Shared LLM key (Google Gemini) made available to the container so
+# provision_tenant.py can auto-configure Gemini for each new tenant.
+[[ -n "${GEMINI_API_KEY:-}" ]] && set_env GEMINI_API_KEY "$GEMINI_API_KEY"
+
 [[ -n "${MYSQL_PASSWORD:-}" ]] && set_env MYSQL_PASSWORD "$MYSQL_PASSWORD"
 [[ -n "${MINIO_PASSWORD:-}" ]] && set_env MINIO_PASSWORD "$MINIO_PASSWORD"
 [[ -n "${REDIS_PASSWORD:-}" ]] && set_env REDIS_PASSWORD "$REDIS_PASSWORD"

@@ -16,6 +16,7 @@ Output (stdout, last line): {"ok": true, "tenant_id": "...", "api_token": "..."}
 import argparse
 import base64
 import json
+import os
 import sys
 
 sys.path.insert(0, "/ragflow")
@@ -108,8 +109,57 @@ def main() -> int:
             print(json.dumps({"ok": False, "error": "APITokenService.save failed"}))
             return 1
 
-    print(json.dumps({"ok": True, "tenant_id": tenant_id, "api_token": token}))
+    # Configure the shared LLM provider (Google Gemini) for this tenant so the
+    # workspace works out of the box. Uses the tenant's own token against the
+    # local REST API (same sequence proven for the admin tenant). Idempotent.
+    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    gemini_ready = False
+    if gemini_key:
+        gemini_ready = _configure_gemini(token, gemini_key)
+
+    print(json.dumps({"ok": True, "tenant_id": tenant_id, "api_token": token, "gemini": gemini_ready}))
     return 0
+
+
+def _configure_gemini(token: str, api_key: str) -> bool:
+    import urllib.request
+
+    base = "http://localhost:9380/api/v1"
+    hdr = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+    def call(method: str, path: str, payload: dict) -> bool:
+        try:
+            req = urllib.request.Request(
+                base + path, data=json.dumps(payload).encode(), headers=hdr, method=method
+            )
+            with urllib.request.urlopen(req, timeout=30) as r:
+                body = json.loads(r.read().decode())
+                return body.get("code") == 0
+        except Exception:
+            return False
+
+    call("PUT", "/providers", {"provider_name": "Gemini"})
+    call(
+        "POST",
+        "/providers/Gemini/instances",
+        {"instance_name": "prod", "api_key": api_key, "base_url": "", "region": "", "model_info": []},
+    )
+    ok_chat = call(
+        "PATCH",
+        "/models/default",
+        {"model_type": "chat", "model_provider": "Gemini", "model_instance": "prod", "model_name": "gemini-2.5-flash"},
+    )
+    ok_embed = call(
+        "PATCH",
+        "/models/default",
+        {
+            "model_type": "embedding",
+            "model_provider": "Gemini",
+            "model_instance": "prod",
+            "model_name": "gemini-embedding-001",
+        },
+    )
+    return ok_chat and ok_embed
 
 
 if __name__ == "__main__":
