@@ -7,8 +7,8 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$HERE/.."
-BILLING="$ROOT/billing"
+ROOT="$(cd "$HERE/.." && pwd)"
+BILLING="$(cd "$ROOT/billing" && pwd)"
 RAGFLOW_CONTAINER="${RAGFLOW_CONTAINER:-docker-ragflow-cpu-1}"
 
 echo "==> Node.js 20"
