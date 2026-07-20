@@ -203,6 +203,28 @@ if [[ -f "$LOGIN" ]]; then
   perl -0777 -pi -e "s/\\? 'py-8' : 'mt-3 border'/? 'py-8' : 'mt-3'/g" "$LOGIN"
 fi
 
+echo "==> Settings sidebar: Billing entry"
+SIDEBAR="$WEB/src/pages/user-setting/sidebar/index.tsx"
+if [[ -f "$SIDEBAR" ]]; then
+python3 - "$SIDEBAR" <<'PYEOF'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+if "runook/account" not in s:
+    s = s.replace("  Columns3Cog,", "  Columns3Cog,\n  LucideCreditCard,", 1)
+    li = (
+        '              <li className="w-full md:w-auto">\n'
+        '                <Button block variant="ghost" aria-label="Billing" className="relative h-10 text-base max-md:size-10 max-md:p-0 max-md:justify-center justify-start gap-2.5 px-2 md:px-3" onClick={() => window.open("/runook/account?email=" + encodeURIComponent(userInfo?.email || ""), "_blank")}>\n'
+        '                  <span className="flex items-center gap-2.5 max-md:gap-0"><LucideCreditCard className="size-[1em]" /><span className="hidden md:inline">Billing</span></span>\n'
+        '                </Button>\n'
+        '              </li>\n'
+        '        </ul>'
+    )
+    s = s.replace("        </ul>", li, 1)
+    open(p, "w").write(s)
+PYEOF
+fi
+
 echo "==> Accent + sidebar CSS variables"
 sed -i.bak \
   -e "s#--accent-primary: 0 190 180;#--accent-primary: 0 181 255;#g" \
