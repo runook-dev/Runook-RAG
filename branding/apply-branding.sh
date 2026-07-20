@@ -204,33 +204,50 @@ if [[ -f "$LOGIN" ]]; then
   perl -0777 -pi -e "s/\\? 'py-8' : 'mt-3 border'/? 'py-8' : 'mt-3'/g" "$LOGIN"
 fi
 
-echo "==> Settings sidebar: Billing entry"
+echo "==> Settings: native Billing page (menu item + route + component)"
+# Ship the Billing page component into the web tree.
+mkdir -p "$WEB/src/pages/user-setting/billing"
+cp "$HERE/billing-page.tsx" "$WEB/src/pages/user-setting/billing/index.tsx"
+
+# Add a native "Billing" menu item to the settings sidebar (renders in-layout
+# via the standard handleMenuClick navigation, not a new tab).
 SIDEBAR="$WEB/src/pages/user-setting/sidebar/index.tsx"
-if [[ -f "$SIDEBAR" ]]; then
-python3 - "$SIDEBAR" <<'PYEOF'
+[[ -f "$SIDEBAR" ]] && python3 - "$SIDEBAR" <<'PYEOF'
 import sys
 p = sys.argv[1]
 s = open(p).read()
-if "runook/account" not in s:
-    # Inline SVG icon (no lucide import — export names vary across versions).
-    icon = (
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" '
-        'strokeLinecap="round" strokeLinejoin="round" className="size-[1em]">'
-        '<rect x="2" y="5" width="20" height="14" rx="2"></rect>'
-        '<line x1="2" y1="10" x2="22" y2="10"></line></svg>'
+if "'/billing'" not in s:
+    item = (
+        "  {\n"
+        "    icon: (\n"
+        '      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="size-[1em]"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>\n'
+        "    ),\n"
+        "    label: 'Billing',\n"
+        "    key: '/billing' as Routes,\n"
+        "  },\n"
+        "];"
     )
-    li = (
-        '              <li className="w-full md:w-auto">\n'
-        '                <Button block variant="ghost" aria-label="Billing" className="relative h-10 text-base max-md:size-10 max-md:p-0 max-md:justify-center justify-start gap-2.5 px-2 md:px-3" onClick={() => window.open("/runook/account?email=" + encodeURIComponent(userInfo?.email || ""), "_blank")}>\n'
-        '                  <span className="flex items-center gap-2.5 max-md:gap-0">' + icon + '<span className="hidden md:inline">Billing</span></span>\n'
-        '                </Button>\n'
-        '              </li>\n'
-        '        </ul>'
-    )
-    s = s.replace("        </ul>", li, 1)
+    s = s.replace("];", item, 1)
     open(p, "w").write(s)
 PYEOF
-fi
+
+# Register the Billing child route so it renders inside the settings Outlet.
+ROUTES="$WEB/src/routes.tsx"
+[[ -f "$ROUTES" ]] && python3 - "$ROUTES" <<'PYEOF'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+anchor = "Component: () => import('@/pages/user-setting/setting-api'),\n          },"
+if "user-setting/billing'" not in s and anchor in s:
+    add = anchor + (
+        "\n          {\n"
+        "            path: `${Routes.UserSetting}/billing`,\n"
+        "            Component: () => import('@/pages/user-setting/billing'),\n"
+        "          },"
+    )
+    s = s.replace(anchor, add, 1)
+    open(p, "w").write(s)
+PYEOF
 
 echo "==> Accent + sidebar CSS variables"
 sed -i.bak \
