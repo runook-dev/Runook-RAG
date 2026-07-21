@@ -6,12 +6,15 @@ import { NextResponse } from "next/server";
 import { config } from "@/lib/config";
 import { stripe } from "@/lib/stripe";
 import { getStore } from "@/lib/store";
+import { resolveCallerEmail } from "@/lib/identity";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const email = (new URL(req.url).searchParams.get("email") || "").toLowerCase();
-  if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
+  // Identity comes from the caller's RAGFlow session, never a query param —
+  // otherwise anyone could open another customer's Stripe billing portal.
+  const email = await resolveCallerEmail(req);
+  if (!email) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const billing = await getStore().getByEmail(email);
   if (!billing?.stripeCustomerId) {

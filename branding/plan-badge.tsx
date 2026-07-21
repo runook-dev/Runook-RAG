@@ -4,6 +4,7 @@
 // the in-app Billing settings page.
 import { useFetchUserInfo } from '@/hooks/use-user-setting-request';
 import { Routes } from '@/routes';
+import { getAuthorization } from '@/utils/authorization-util';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
@@ -18,8 +19,10 @@ export function RunookPlanBadge() {
   const [info, setInfo] = useState<PlanInfo | null>(null);
 
   useEffect(() => {
+    // Only when logged in. Identity is proven by the RAGFlow session token
+    // (forwarded to the billing service), never by an email query param.
     if (!email) return;
-    fetch('/runook/plan?email=' + encodeURIComponent(email))
+    fetch('/runook/plan', { headers: { Authorization: getAuthorization() } })
       .then((r) => r.json())
       .then(setInfo)
       .catch(() => {});

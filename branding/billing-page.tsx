@@ -3,7 +3,12 @@
 // lists Stripe invoices. Data is fetched same-origin from the billing service
 // (Caddy routes /runook/* -> billing). Part of the web bundle, so it hydrates.
 import { useFetchUserInfo } from '@/hooks/use-user-setting-request';
+import { getAuthorization } from '@/utils/authorization-util';
 import { useEffect, useState, type ReactNode } from 'react';
+
+// All /runook/* calls prove identity with the RAGFlow session token; the
+// billing service resolves the caller's email from it (never a query param).
+const authHeaders = (): HeadersInit => ({ Authorization: getAuthorization() });
 
 interface Usage {
   plan?: string | null;
@@ -98,7 +103,7 @@ export default function Billing() {
       setLoading(false);
       return;
     }
-    fetch('/runook/usage?email=' + encodeURIComponent(email))
+    fetch('/runook/usage', { headers: authHeaders() })
       .then((r) => r.json())
       .then(setD)
       .catch(() => {})
@@ -107,14 +112,14 @@ export default function Billing() {
 
   useEffect(() => {
     if (tab !== 'history' || invoices !== null || !email) return;
-    fetch('/runook/invoices?email=' + encodeURIComponent(email))
+    fetch('/runook/invoices', { headers: authHeaders() })
       .then((r) => r.json())
       .then((j) => setInvoices(j.invoices || []))
       .catch(() => setInvoices([]));
   }, [tab, invoices, email]);
 
   async function manage() {
-    const r = await fetch('/runook/portal?email=' + encodeURIComponent(email));
+    const r = await fetch('/runook/portal', { headers: authHeaders() });
     const j = await r.json();
     if (j.url) window.location.href = j.url;
   }

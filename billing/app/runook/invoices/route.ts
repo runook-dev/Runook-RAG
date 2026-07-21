@@ -6,12 +6,14 @@
 import { NextResponse } from "next/server";
 import { getStore } from "@/lib/store";
 import { stripe } from "@/lib/stripe";
+import { resolveCallerEmail } from "@/lib/identity";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const email = (new URL(req.url).searchParams.get("email") || "").toLowerCase();
-  if (!email) return NextResponse.json({ invoices: [] });
+  // Identity comes from the caller's RAGFlow session, never a query param.
+  const email = await resolveCallerEmail(req);
+  if (!email) return NextResponse.json({ invoices: [] }, { status: 401 });
 
   const billing = await getStore().getByEmail(email);
   const customerId = billing?.stripeCustomerId;

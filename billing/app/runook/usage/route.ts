@@ -6,13 +6,15 @@ import { NextResponse } from "next/server";
 import { getStore } from "@/lib/store";
 import { getAllow } from "@/lib/allowlist";
 import { getMetrics, getTenantIdByEmail } from "@/lib/metrics";
+import { resolveCallerEmail } from "@/lib/identity";
 import { PLANS, type PlanId } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const email = (new URL(req.url).searchParams.get("email") || "").toLowerCase();
-  if (!email) return NextResponse.json({ plan: null });
+  // Identity comes from the caller's RAGFlow session, never a query param.
+  const email = await resolveCallerEmail(req);
+  if (!email) return NextResponse.json({ plan: null }, { status: 401 });
 
   // Precedence: admin override > active billing > trial (freemium default).
   const override = await getAllow(email);
