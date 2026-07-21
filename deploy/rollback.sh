@@ -20,7 +20,8 @@ list() {
   local cur
   cur="$(docker images -q runook-rag:local 2>/dev/null || true)"
   echo "Available runook-rag versions:"
-  docker images runook-rag --format '  {{.Tag}}\t{{.CreatedAt}}\t{{.Size}}\t{{.ID}}' | grep -v $'^  local\t' || true
+  docker images runook-rag --format '{{.Tag}}\t{{.CreatedAt}}\t{{.Size}}\t{{.ID}}' \
+    | awk -F'\t' '$1!="local"{printf "  %s\t%s\t%s\t%s\n",$1,$2,$3,$4}'
   echo
   echo "Currently deployed runook-rag:local -> image id ${cur:-none}"
   echo
