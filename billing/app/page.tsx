@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { PLANS, type PlanId } from "@/lib/plans";
+import { SiteFooter } from "@/components/site-footer";
 
 const ORDER: PlanId[] = ["trial", "starter", "growth", "business", "enterprise"];
 const FEATURED: PlanId = "growth";
@@ -14,8 +15,13 @@ function priceLabel(amount: number | null): string {
 
 export default function Pricing() {
   const [loading, setLoading] = useState<PlanId | null>(null);
+  const [agreed, setAgreed] = useState(false);
 
   async function subscribe(plan: PlanId) {
+    if (!agreed) {
+      alert("Please read and agree to the Terms of Service and Privacy Policy first.");
+      return;
+    }
     setLoading(plan);
     try {
       const res = await fetch("/api/checkout", {
@@ -74,6 +80,22 @@ export default function Pricing() {
         </p>
       </div>
 
+      <label className="relative mx-auto mb-8 flex max-w-xl cursor-pointer items-start gap-2.5 text-sm text-[var(--muted)]">
+        <input
+          type="checkbox"
+          checked={agreed}
+          onChange={(e) => setAgreed(e.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+        />
+        <span>
+          I have read and agree to the{" "}
+          <a href="/legal/terms" target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>Terms of Service</a>,{" "}
+          <a href="/legal/privacy" target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>Privacy Policy</a>, and{" "}
+          <a href="/legal/refund" target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>Refund Policy</a>.
+          Subscriptions renew automatically until cancelled.
+        </span>
+      </label>
+
       <div className="relative grid grid-cols-1 gap-5 md:grid-cols-3 xl:grid-cols-5">
         {ORDER.map((id) => {
           const p = PLANS[id];
@@ -113,8 +135,9 @@ export default function Pricing() {
                 {p.cta === "subscribe" && (
                   <button
                     onClick={() => subscribe(id)}
-                    disabled={loading === id}
-                    className="w-full rounded-lg py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                    disabled={loading === id || !agreed}
+                    title={!agreed ? "Agree to the Terms first" : undefined}
+                    className="w-full rounded-lg py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                     style={{ background: featured ? "linear-gradient(135deg,#2dd4ff,#0066ff)" : "var(--accent)" }}
                   >
                     {loading === id ? "Redirecting…" : "Upgrade now"}
@@ -163,6 +186,8 @@ export default function Pricing() {
       <p className="relative mt-12 text-center text-xs text-[var(--muted)]">
         Prices in USD. After subscribing you&apos;ll get access at rag.runook.com.
       </p>
+
+      <SiteFooter />
     </main>
   );
 }
