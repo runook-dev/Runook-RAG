@@ -59,6 +59,7 @@ async function push(envfile, prefix) {
     );
     n++;
     console.log(`  stored ${prefix}/${key}`); // name only, never the value
+    await new Promise((r) => setTimeout(r, 250)); // stay under SSM standard throughput
   }
   console.log(`push complete: ${n} parameters -> ${prefix}`);
 }
