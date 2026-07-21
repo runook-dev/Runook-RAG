@@ -44,6 +44,11 @@ async function push(envfile, prefix) {
   const pairs = parseEnv(await fs.readFile(envfile, "utf8"));
   let n = 0;
   for (const [key, value] of pairs) {
+    // SSM SecureString requires a non-empty value; skip blank/unset vars.
+    if (value === "") {
+      console.log(`  skipped ${prefix}/${key} (empty)`);
+      continue;
+    }
     await ssm.send(
       new PutParameterCommand({
         Name: `${prefix}/${key}`,
