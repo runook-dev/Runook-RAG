@@ -90,6 +90,14 @@ const ICON = {
   ),
 };
 
+// Paid tiers offered by the in-product upgrade picker. Keep in sync with
+// billing/lib/plans.ts (source of truth for enforcement + Stripe lookup keys).
+const UPGRADE_PLANS = [
+  { id: 'starter', name: 'Starter', price: '$99', blurb: '10 knowledge bases · 3 seats · 5 GB · 5,000 credits' },
+  { id: 'growth', name: 'Growth', price: '$399', blurb: '50 knowledge bases · 10 seats · 25 GB · 25,000 credits' },
+  { id: 'business', name: 'Business', price: '$999', blurb: 'Unlimited KBs · 25 seats · 100 GB · 100,000 credits' },
+];
+
 export default function Billing() {
   const { data: userInfo } = useFetchUserInfo();
   const email = ((userInfo as { email?: string })?.email || '').toLowerCase();
@@ -97,6 +105,8 @@ export default function Billing() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'overview' | 'history'>('overview');
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [busyPlan, setBusyPlan] = useState<string | null>(null);
 
   useEffect(() => {
     if (!email) {
@@ -122,6 +132,21 @@ export default function Billing() {
     const r = await fetch('/runook/portal', { headers: authHeaders() });
     const j = await r.json();
     if (j.url) window.location.href = j.url;
+  }
+
+  // Authenticated in-product checkout: the subscription binds to the logged-in
+  // account's email (never a self-typed one), so upgrades always hit the right
+  // account. Existing subscribers are routed to the portal server-side.
+  async function checkout(planId: string) {
+    setBusyPlan(planId);
+    try {
+      const r = await fetch('/runook/checkout?plan=' + planId, { headers: authHeaders() });
+      const j = await r.json();
+      if (j.url) window.location.href = j.url;
+      else alert(j.error || 'Could not start checkout');
+    } finally {
+      setBusyPlan(null);
+    }
   }
 
   const plan = d?.plan || 'trial';
@@ -151,24 +176,48 @@ export default function Billing() {
           {d?.manageable ? (
             <button
               onClick={manage}
-              className="rounded-lg border px-4 py-2 text-sm font-medium text-text-primary hover:bg-bg-card"
+              className="rounded-lg px-4 py-2 text-sm font-semibold text-white"
+              style={{ background: '#00b5ff' }}
             >
-              Manage payment methods
+              Manage subscription
             </button>
-          ) : null}
-          {!isEnterprise ? (
-            <a
-              href="https://pay.runook.com"
-              target="_blank"
-              rel="noreferrer"
+          ) : !isEnterprise ? (
+            <button
+              onClick={() => setShowUpgrade((v) => !v)}
               className="rounded-lg px-4 py-2 text-sm font-semibold text-white"
               style={{ background: '#00b5ff' }}
             >
               {isPaid ? 'Change plan' : 'Upgrade now'}
-            </a>
+            </button>
           ) : null}
         </div>
       </div>
+
+      {/* In-product upgrade picker: checkout binds to the logged-in account. */}
+      {showUpgrade && !d?.manageable && !isEnterprise ? (
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+          {UPGRADE_PLANS.filter((p) => p.id !== plan).map((p) => (
+            <div key={p.id} className="flex flex-col rounded-xl border bg-bg-card p-5">
+              <div className="flex items-baseline justify-between">
+                <span className="font-semibold text-text-primary">{p.name}</span>
+                <span className="text-text-primary">
+                  {p.price}
+                  <span className="text-xs text-text-secondary">/mo</span>
+                </span>
+              </div>
+              <p className="mt-2 flex-1 text-xs text-text-secondary">{p.blurb}</p>
+              <button
+                onClick={() => checkout(p.id)}
+                disabled={busyPlan === p.id}
+                className="mt-4 rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50"
+                style={{ background: '#00b5ff' }}
+              >
+                {busyPlan === p.id ? 'Redirecting…' : `Choose ${p.name}`}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {/* Tabs */}
       <div className="mb-6 flex gap-6 border-b">

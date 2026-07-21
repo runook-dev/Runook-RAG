@@ -80,6 +80,14 @@ export default function Pricing() {
         </p>
       </div>
 
+      <div className="relative mx-auto mb-6 max-w-xl rounded-xl border p-4 text-center text-sm text-[var(--muted)]">
+        Already have a Runook RAG account?{" "}
+        <a href="https://rag.runook.com/user-setting/billing" style={{ color: "var(--accent)" }}>
+          Sign in and upgrade from inside the product
+        </a>{" "}
+        so your subscription attaches to your account. New here? Subscribe below to get started.
+      </div>
+
       <label className="relative mx-auto mb-8 flex max-w-xl cursor-pointer items-start gap-2.5 text-sm text-[var(--muted)]">
         <input
           type="checkbox"
