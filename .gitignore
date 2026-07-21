@@ -37,6 +37,9 @@ npm-debug.log*
 /deploy/**/.env.merged
 /deploy/**/.env.runook
 
+# Host-local release/rollback history (per-host, not source)
+/deploy/.release-history
+
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts

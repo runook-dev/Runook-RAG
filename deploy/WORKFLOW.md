@@ -48,15 +48,48 @@ bash deploy/build-image.sh local
 
 ### 3. Ship it (on the EC2 engine host)
 
+Preferred — **versioned release** (build a git-SHA-tagged image, promote it to
+the running `runook-rag:local` tag, restart, keep history + prune old images):
+
 ```bash
 cd Runook-RAG
 git pull
-bash deploy/build-image.sh local        # rebuild image with latest branding
-cd deploy && sudo bash start-engine.sh  # restart stack on the new image
+sudo bash deploy/release.sh             # build runook-rag:<sha>, deploy, record history
+```
+
+Plain (unversioned) equivalent still works:
+
+```bash
+bash deploy/build-image.sh local
+cd deploy && sudo bash start-engine.sh
 ```
 
 No external CI pipeline; deploy is "build image + restart", fully under our
 control. (The agent can run all of this remotely via AWS SSM on the EC2 host.)
+
+### Rollback (seconds, no rebuild)
+
+`release.sh` keeps the last few SHA-tagged images, so rollback is just
+re-pointing `runook-rag:local` at a prior image and recreating the container:
+
+```bash
+sudo bash deploy/rollback.sh            # list available versions + history
+sudo bash deploy/rollback.sh --prev     # roll back to the release before current
+sudo bash deploy/rollback.sh <sha>      # roll back to a specific version
+```
+
+`deploy/.release-history` (per-host, gitignored) logs each release/rollback.
+The running stack always uses the `runook-rag:local` tag — release/rollback
+only change which built image that tag points to.
+
+### Data safety (backups)
+
+- **DynamoDB** (`runook-rag`): point-in-time recovery (PITR) is enabled — restore
+  to any second in the last 35 days via the AWS console/CLI.
+- **Engine volumes** (MySQL/ES/MinIO/Redis on the host EBS root volume): a daily
+  EBS snapshot policy (AWS Data Lifecycle Manager) retains the last 7 days.
+  A manual baseline snapshot can be taken anytime with
+  `aws ec2 create-snapshot --volume-id <vol> --description runook-manual`.
 
 ## Upgrading to a newer RAGFlow release
 
