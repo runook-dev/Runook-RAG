@@ -14,13 +14,21 @@ git config --global --add safe.directory "$REPO"
 git -C "$REPO" pull --ff-only origin main 2>&1 | tail -1 || true
 bash "$REPO/deploy/setup-ec2.sh"
 
-echo "==> [2/6] pull config from SSM (prod values)"
+echo "==> [2/7] Node.js 20 (needed for SSM config pull + billing)"
+if ! command -v node >/dev/null 2>&1 || [ "$(node -v | cut -dv -f2 | cut -d. -f1)" -lt 20 ]; then
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  apt-get install -y nodejs
+fi
+
+echo "==> [3/7] pull config from SSM (prod values)"
 cd "$REPO/billing"
 npm install --no-audit --no-fund 2>&1 | tail -1
 node scripts/secrets-sync.mjs pull "$REPO/deploy/engine.env" /runook/engine
 node scripts/secrets-sync.mjs pull "$REPO/billing/.env.local" /runook/billing
+# Sanity: the engine env must contain the image tag or start-engine will fail.
+grep -q '^RAGFLOW_IMAGE=' "$REPO/deploy/engine.env" || { echo "FATAL: engine.env missing RAGFLOW_IMAGE (SSM pull failed)"; exit 1; }
 
-echo "==> [3/6] apply staging overrides"
+echo "==> [4/7] apply staging overrides"
 E="$REPO/deploy/engine.env"; B="$REPO/billing/.env.local"
 set_kv() { local f="$1" k="$2" v="$3"; grep -q "^${k}=" "$f" && sed -i "s#^${k}=.*#${k}=${v}#" "$f" || echo "${k}=${v}" >> "$f"; }
 set_kv "$E" RAG_DOMAIN staging-rag.runook.com
@@ -30,13 +38,13 @@ set_kv "$B" RUNOOK_DDB_TABLE runook-rag-staging
 set_kv "$B" BILLING_BASE_URL https://staging-pay.runook.com
 set_kv "$B" APP_URL https://staging-rag.runook.com
 
-echo "==> [4/6] build branded image"
+echo "==> [5/7] build branded image"
 bash "$REPO/deploy/build-image.sh" local 2>&1 | tail -6
 
-echo "==> [5/6] start engine + Caddy"
+echo "==> [6/7] start engine + Caddy"
 cd "$REPO/deploy" && bash start-engine.sh 2>&1 | tail -6
 
-echo "==> [6/6] billing + monitoring"
+echo "==> [7/7] billing + monitoring"
 bash "$REPO/deploy/setup-billing.sh" 2>&1 | tail -3 || true
 bash "$REPO/deploy/setup-monitoring.sh" 2>&1 | tail -2 || true
 
