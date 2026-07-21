@@ -91,6 +91,28 @@ only change which built image that tag points to.
   A manual baseline snapshot can be taken anytime with
   `aws ec2 create-snapshot --volume-id <vol> --description runook-manual`.
 
+### Secrets (SSM Parameter Store)
+
+The runtime reads secrets from `deploy/engine.env` and `billing/.env.local`
+(gitignored, on the host). Those files are also backed up — encrypted — to AWS
+SSM Parameter Store under `/runook/engine/*` and `/runook/billing/*`, so they
+survive host loss and can be rotated centrally. The host uses its instance-profile
+role for access (no static keys on disk).
+
+```bash
+cd billing
+# Back up current host secrets to SSM (run after any change):
+node scripts/secrets-sync.mjs push ../deploy/engine.env /runook/engine
+node scripts/secrets-sync.mjs push .env.local          /runook/billing
+# Restore onto a fresh host (disaster recovery), then restart services:
+node scripts/secrets-sync.mjs pull ../deploy/engine.env /runook/engine
+node scripts/secrets-sync.mjs pull .env.local          /runook/billing
+```
+
+Rotation = update the value in SSM (or the file + push), `pull`, then restart the
+affected service. The runtime never depends on SSM at boot, so a transient SSM
+failure can't block startup.
+
 ## Upgrading to a newer RAGFlow release
 
 ```bash
