@@ -113,6 +113,39 @@ Rotation = update the value in SSM (or the file + push), `pull`, then restart th
 affected service. The runtime never depends on SSM at boot, so a transient SSM
 failure can't block startup.
 
+## Staging environment (on-demand)
+
+A prod-identical staging stack runs on its own EC2 host (`i-0fd6812849ce90513`,
+t3.xlarge), reachable at **https://staging-rag.runook.com** and
+**https://staging-pay.runook.com** (Elastic IP `54.152.15.159`). It uses its own
+`runook-rag-staging` DynamoDB table and pulls config from SSM with staging
+overrides (see `deploy/staging-bootstrap.sh`).
+
+To save cost it is **start-on-demand** — start it before testing, stop it after:
+
+```bash
+bash deploy/staging.sh up       # start (~$0.17/hr while running)
+bash deploy/staging.sh status
+bash deploy/staging.sh down      # stop (only EBS + EIP billed when down)
+```
+
+Deploy a change to staging first (from your workstation via SSM, or on the host):
+
+```bash
+# on the staging host
+cd /home/ubuntu/Runook-RAG && git pull && sudo bash deploy/release.sh
+```
+
+Console prerequisites for full staging parity (one-time, in the respective dashboards):
+
+- **Stripe (test mode)**: add a webhook endpoint `https://staging-pay.runook.com/api/stripe/webhook`,
+  copy its signing secret into staging `billing/.env.local` as `STRIPE_WEBHOOK_SECRET`
+  (and use test-mode API keys), then restart `runook-billing`. Without this,
+  login/KB/chat work but checkout won't provision.
+- **Google OAuth**: add `https://staging-rag.runook.com/api/v1/auth/oauth/google/callback`
+  as an authorized redirect URI. Without this, Google sign-in fails on staging
+  (password login still works).
+
 ## Upgrading to a newer RAGFlow release
 
 ```bash
